@@ -1,0 +1,24 @@
+# Secretos y configuración local
+.env
+.env.*
+!.env.example
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+backend/tubeyou.db
+backend/uploads/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.claude/
