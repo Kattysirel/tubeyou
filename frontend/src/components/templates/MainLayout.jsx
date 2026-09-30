@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { LogoMark } from '../atoms/Logo.jsx'
 import IconButton from '../atoms/IconButton.jsx'
-import Navbar from './Navbar.jsx'
-import Sidebar, { SidebarContent } from './Sidebar.jsx'
+import Navbar from '../organisms/Navbar.jsx'
+import Sidebar, { SidebarContent } from '../organisms/Sidebar.jsx'
 
 const DESKTOP = '(min-width: 1024px)'
 

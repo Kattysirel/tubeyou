@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 
 import boto3
 
-from src.config import settings
+from src.core.config import settings
 from src.services.storage import THUMBNAILS, VIDEOS, new_key
 
 

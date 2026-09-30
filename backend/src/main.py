@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src import models  # noqa: F401  (registra las tablas en Base.metadata)
-from src.config import settings
+from src.core.config import settings
 from src.database.connection import Base, engine
 from src.routers import comments, users, videos
 

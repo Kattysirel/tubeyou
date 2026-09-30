@@ -8,29 +8,42 @@ Interfaz en rojo, negro y blanco, con **tema claro y oscuro**.
 
 ```
 React dist/ ─► S3 Frontend
-FastAPI     ─► EC2 (Nginx + Uvicorn)
+FastAPI     ─► EC2 (Nginx + PM2)
 PostgreSQL  ─► RDS
 MP4         ─► S3 Videos
 JPG/PNG     ─► S3 Miniaturas
 ```
 
+Backend: **arquitectura por capas** (cada capa es una carpeta con su responsabilidad).
+
 ```
 backend/src/
-├── crud/        acceso a datos (sin HTTP)
+├── core/        configuración y variables de entorno
 ├── database/    engine, sesión y Base de SQLAlchemy
 ├── models/      tablas: User, Video, Comment
+├── schemas/     validación Pydantic (entrada/salida)
+├── crud/        acceso a datos (sin HTTP)
 ├── routers/     endpoints FastAPI
-├── schemas/     validación Pydantic
-├── security/    bcrypt + JWT (auxiliar)
-├── services/    almacenamiento local / S3 (auxiliar)
-└── main.py
+├── security/    bcrypt + JWT
+├── services/    almacenamiento local / S3
+└── main.py      punto de entrada
+```
 
+Frontend: **Atomic Design** (atoms → molecules → organisms → templates → pages).
+
+```
 frontend/src/
-├── components/  atoms/ · molecules/ · organisms/   (Atomic Design)
+├── components/
+│   ├── atoms/       Button, Input, Avatar, Logo, Icon...
+│   ├── molecules/   SearchBar, VideoCard, CommentItem, FileDrop...
+│   ├── organisms/   Navbar, Sidebar, VideoGrid, VideoPlayer, CommentsSection...
+│   └── templates/   MainLayout (navbar + sidebar), AuthLayout
 ├── pages/       HomePage · PlayerPage · AuthPage · ProfilePage
 ├── context/     AuthContext · ThemeContext
+├── hooks/       useApi
 ├── services/    cliente de la API
-├── styles/      Tailwind + tokens de color
+├── utils/       formato de fechas y vistas
+├── styles/      Tailwind + tokens de color (tema claro/oscuro)
 ├── App.jsx
 └── main.jsx
 ```
@@ -69,12 +82,20 @@ python -m venv .venv
 .venv/Scripts/activate        # Linux/Mac: source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # opcional
-python -m uvicorn src.main:app --reload --port 8000
+cd src
+fastapi dev          # desarrollo con recarga automática (puerto 8000)
 ```
 Sin `.env` usa SQLite y guarda los archivos en `backend/uploads/`. Para PostgreSQL define
 `DATABASE_URL=postgresql+psycopg://usuario:clave@localhost:5432/tubeyou`.
 
-Pruebas: `python -m pytest -q`.
+Pruebas (desde `backend/`): `python -m pytest -q`.
+
+En producción (EC2) se entra a `src/` y se deja en segundo plano con PM2:
+
+```bash
+cd backend/src
+pm2 start "fastapi run"
+```
 
 ### Frontend
 ```bash

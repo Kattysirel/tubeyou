@@ -3,7 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from src.config import settings
+from src.core.config import settings
 from src.crud import video as video_crud
 from src.database.connection import get_db
 from src.models.user import User

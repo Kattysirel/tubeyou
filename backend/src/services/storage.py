@@ -3,7 +3,7 @@ import uuid
 from pathlib import PurePosixPath
 from typing import BinaryIO, Protocol
 
-from src.config import settings
+from src.core.config import settings
 
 VIDEOS = "videos"
 THUMBNAILS = "thumbnails"

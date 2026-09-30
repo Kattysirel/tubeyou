@@ -3,13 +3,13 @@
 Arquitectura destino:
 
 ```
-S3 Frontend (dist/)  ──►  Navegador  ──►  EC2 (Nginx :80 → Uvicorn :8000, FastAPI)
+S3 Frontend (dist/)  ──►  Navegador  ──►  EC2 (Nginx :80 → PM2 + FastAPI :8000)
                                               ├──► RDS PostgreSQL (subred privada)
                                               ├──► S3 Videos      (MP4)
                                               └──► S3 Miniaturas  (JPG/JPEG/PNG)
 ```
 
-Sustituye `REGION`, `CUENTA`, `OWNER/REPO` y los nombres de bucket por los tuyos.
+Sustituye `REGION`, `CUENTA`, `Kattysirel/tubeyou` y los nombres de bucket por los tuyos.
 **Ninguna credencial de AWS se escribe en el código**: la EC2 usa un *IAM Role* y GitHub usa *OIDC*.
 
 ## 1. Red (VPC y Security Groups)
@@ -84,21 +84,22 @@ Crea el rol `tubeyou-ec2-role` (servicio de confianza: EC2), adjunta:
 Asocia el rol a la instancia (*Actions → Security → Modify IAM role*). `boto3` toma las credenciales
 temporales del rol automáticamente.
 
-## 5. EC2 (FastAPI)
+## 5. EC2 (FastAPI con PM2)
 
 Amazon Linux 2023, `t3.micro`, con `sg-ec2` y el rol anterior. Una sola vez, por SSH o Session Manager:
 
 ```bash
-sudo dnf install -y git nginx python3.11 python3.11-pip
+sudo dnf install -y git nginx nodejs python3.11 python3.11-pip
+sudo npm install -g pm2
 sudo mkdir -p /opt/tubeyou && sudo chown ec2-user:ec2-user /opt/tubeyou
-git clone https://github.com/OWNER/REPO.git /opt/tubeyou
-# Repositorio privado: usa una deploy key (solo lectura) o un token en la URL del remote.
+git clone https://github.com/Kattysirel/tubeyou.git /opt/tubeyou
+python3.11 -m pip install --user -r /opt/tubeyou/backend/requirements.txt
 ```
 
-Variables de entorno (**fuera del repositorio**) en `/etc/tubeyou.env`:
+Variables de entorno (**fuera del repositorio**, el archivo `.env` está en `.gitignore`). La API las lee de `backend/.env`:
 
 ```bash
-sudo tee /etc/tubeyou.env >/dev/null <<'EOF'
+cat > /opt/tubeyou/backend/.env <<'EOF'
 DATABASE_URL=postgresql+psycopg://USUARIO:CLAVE@ENDPOINT-RDS:5432/tubeyou
 SECRET_KEY=<cadena-aleatoria-larga>
 CORS_ORIGINS=http://tubeyou-frontend.s3-website-REGION.amazonaws.com
@@ -107,20 +108,36 @@ AWS_REGION=REGION
 S3_VIDEOS_BUCKET=tubeyou-videos
 S3_THUMBS_BUCKET=tubeyou-miniaturas
 EOF
-sudo chmod 600 /etc/tubeyou.env
+chmod 600 /opt/tubeyou/backend/.env
 ```
 
 Generar `SECRET_KEY`: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
-Nginx y primer arranque:
+**Arrancar la API en segundo plano.** El backend sigue una arquitectura por capas dentro de `backend/src/`
+(`crud/`, `database/`, `models/`, `routers/`, `schemas/`, `main.py`). Entra a `src/` y ejecuta:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+cd /opt/tubeyou/backend/src
+pm2 start "fastapi run"
+pm2 save
+pm2 startup        # copia y ejecuta la línea que imprime, para que arranque al reiniciar la EC2
+```
+
+`fastapi run` descubre solo `main.py` y usa el puerto 8000: no hace falta indicar puerto ni nombre.
+Comandos útiles: `pm2 list`, `pm2 logs fastapi`, `pm2 restart fastapi`.
+
+Nginx (recibe en el puerto 80 y reenvía al 8000):
 
 ```bash
 sudo cp /opt/tubeyou/deploy/nginx.conf /etc/nginx/conf.d/tubeyou.conf
 sudo systemctl enable --now nginx
-bash /opt/tubeyou/deploy/deploy_backend.sh origin/main
 ```
 
 La API queda en `http://IP-PUBLICA/docs`. `client_max_body_size 110m` en Nginx permite videos de hasta 100 MB.
+
+A partir de aquí los despliegues los hace GitHub Actions con `deploy/deploy_backend.sh`
+(hace `git reset`, instala dependencias y ejecuta `pm2 restart fastapi`).
 
 ## 6. GitHub Actions + OIDC (puntos extra)
 
@@ -138,7 +155,7 @@ La API queda en `http://IP-PUBLICA/docs`. `client_max_body_size 110m` en Nginx p
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
       "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-      "StringLike":   { "token.actions.githubusercontent.com:sub": "repo:OWNER/REPO:environment:production" }
+      "StringLike":   { "token.actions.githubusercontent.com:sub": "repo:Kattysirel/tubeyou:environment:production" }
     }
   }]
 }
