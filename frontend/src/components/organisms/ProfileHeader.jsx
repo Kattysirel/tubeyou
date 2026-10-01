@@ -1,4 +1,4 @@
-import { formatViews } from '../../utils/format.js'
+import { formatViews } from '../../services/format.js'
 import Avatar from '../atoms/Avatar.jsx'
 import Button from '../atoms/Button.jsx'
 import Icon from '../atoms/Icon.jsx'

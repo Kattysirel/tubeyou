@@ -8,7 +8,7 @@ import MainLayout from '../components/templates/MainLayout.jsx'
 import RecommendedList from '../components/organisms/RecommendedList.jsx'
 import VideoInfo from '../components/organisms/VideoInfo.jsx'
 import VideoPlayer from '../components/organisms/VideoPlayer.jsx'
-import useApi from '../hooks/useApi.js'
+import useApi from '../services/useApi.js'
 import { getRecommended, getVideo, registerView } from '../services/videoService.js'
 
 export default function PlayerPage() {

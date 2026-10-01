@@ -1,3 +1,3 @@
-from src.database.connection import Base, SessionLocal, engine, get_db
+from src.database.database import Base, SessionLocal, engine, get_db
 
 __all__ = ["Base", "SessionLocal", "engine", "get_db"]

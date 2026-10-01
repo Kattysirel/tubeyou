@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { formatViews, timeAgo } from '../../utils/format.js'
+import { formatViews, timeAgo } from '../../services/format.js'
 import Avatar from '../atoms/Avatar.jsx'
 import Thumbnail from './Thumbnail.jsx'
 

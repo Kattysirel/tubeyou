@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src import models  # noqa: F401  (registra las tablas en Base.metadata)
-from src.config import settings
-from src.database.connection import Base, engine
-from src.routers import comments, users, videos
+from src.core.config import settings
+from src.database.database import Base, engine
+from src.routers import comment_router, user_router, video_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -23,9 +23,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(users.router)
-app.include_router(videos.router)
-app.include_router(comments.router)
+app.include_router(user_router.router)
+app.include_router(video_router.router)
+app.include_router(comment_router.router)
 
 if settings.STORAGE_BACKEND == "local":
     settings.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

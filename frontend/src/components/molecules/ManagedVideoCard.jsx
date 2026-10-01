@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { formatDate, formatViews } from '../../utils/format.js'
+import { formatDate, formatViews } from '../../services/format.js'
 import Button from '../atoms/Button.jsx'
 import Thumbnail from './Thumbnail.jsx'
 

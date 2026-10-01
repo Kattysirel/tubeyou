@@ -3,13 +3,13 @@ from typing import Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from src.config import settings
-from src.crud import video as video_crud
-from src.database.connection import get_db
-from src.models.user import User
-from src.schemas.video import VideoRead, ViewsRead
-from src.security.deps import get_current_user
-from src.services.storage import THUMBNAILS, VIDEOS, extension_of, get_storage
+from src.core.config import settings
+from src.core.security import get_current_user
+from src.crud import video_crud
+from src.database.database import get_db
+from src.models.user_model import User
+from src.schemas.video_schema import VideoRead, ViewsRead
+from src.services.storage_service import THUMBNAILS, VIDEOS, extension_of, get_storage
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
 

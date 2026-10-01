@@ -1,4 +1,4 @@
-# Guía manual de AWS (clic a clic)
+# Guía de despliegue manual en AWS (clic a clic)
 
 Todo se hace a mano desde la consola de AWS. El único paso automático es el del frontend:
 GitHub Actions publica `dist/` en S3 usando OIDC (lógica igual a la del repositorio de referencia
@@ -14,7 +14,7 @@ Navegador ─► S3 Frontend (sitio web)
 **Reglas para toda la guía**
 - Trabaja siempre en **una sola región** (esquina superior derecha de la consola). Recomendada: **US East (N. Virginia) `us-east-1`**.
 - Los nombres de bucket son únicos en todo el mundo: reemplaza **`TUSUFIJO`** por algo tuyo (ej. `sirel`). Ejemplo: `tubeyou-frontend-sirel`.
-- Los archivos de `infra/iam` e `infra/s3` son los JSON para copiar y pegar. Reemplaza en ellos `TUSUFIJO` y `TU_ID_DE_CUENTA`.
+- Los JSON de esta guía se copian y pegan. Reemplaza en ellos `TUSUFIJO` y `TU_ID_DE_CUENTA`.
 - Tu **ID de cuenta** (12 dígitos): clic en tu nombre arriba a la derecha → aparece debajo de "Account ID".
 
 Orden: **1 S3 → 2 IAM (rol de la EC2) → 3 Red/Security Groups → 4 RDS → 5 EC2 → 6 backend en la EC2 → 7 OIDC + GitHub → 8 frontend**.
@@ -40,9 +40,57 @@ En cada uno:
 
 **Política de lectura pública** (en cada bucket): clic en el bucket → pestaña **Permissions** →
 **Bucket policy** → **Edit** → pega el JSON → **Save changes**.
-- Frontend → [s3/frontend-bucket-policy.json](s3/frontend-bucket-policy.json)
-- Videos → [s3/videos-bucket-policy.json](s3/videos-bucket-policy.json)
-- Miniaturas → [s3/miniaturas-bucket-policy.json](s3/miniaturas-bucket-policy.json)
+
+**Frontend** (`tubeyou-frontend-TUSUFIJO`):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadFrontend",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::tubeyou-frontend-TUSUFIJO/*"
+    }
+  ]
+}
+```
+
+**Videos** (`tubeyou-videos-TUSUFIJO`):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicRead",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::tubeyou-videos-TUSUFIJO/*"
+    }
+  ]
+}
+```
+
+**Miniaturas** (`tubeyou-miniaturas-TUSUFIJO`):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicRead",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::tubeyou-miniaturas-TUSUFIJO/*"
+    }
+  ]
+}
+```
 
 **Sitio web del frontend:** bucket `tubeyou-frontend-TUSUFIJO` → pestaña **Properties** → baja hasta
 **Static website hosting** → **Edit** → **Enable** → *Hosting type: Host a static website* →
@@ -57,7 +105,24 @@ Copia la **Bucket website endpoint** (la URL `http://...s3-website-us-east-1.ama
 ## 2. Rol de la EC2 (para que suba archivos a S3 sin claves)
 
 **a) Política.** Busca **IAM** → menú izquierdo **Policies** → **Create policy** → pestaña **JSON** →
-pega [iam/ec2-role-s3-policy.json](iam/ec2-role-s3-policy.json) → **Next** → Policy name: `tubeyou-ec2-s3-policy` → **Create policy**.
+pega este JSON → **Next** → Policy name: `tubeyou-ec2-s3-policy` → **Create policy**.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "TubeYouMediaObjects",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": [
+        "arn:aws:s3:::tubeyou-videos-TUSUFIJO/*",
+        "arn:aws:s3:::tubeyou-miniaturas-TUSUFIJO/*"
+      ]
+    }
+  ]
+}
+```
 
 **b) Rol.** IAM → **Roles** → **Create role**:
 1. *Trusted entity type:* **AWS service** · *Use case:* **EC2** → **Next**.
@@ -134,8 +199,12 @@ Se abre una terminal en el navegador. Pega estos bloques:
 
 **a) Instalar todo** (git, nginx, node, python, pm2) y clonar el repositorio:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Kattysirel/tubeyou/main/infra/ec2/setup_ec2.sh -o setup_ec2.sh
-bash setup_ec2.sh https://github.com/Kattysirel/tubeyou.git
+sudo dnf install -y git nginx nodejs python3.11 python3.11-pip
+sudo npm install -g pm2
+sudo mkdir -p /opt/tubeyou && sudo chown ec2-user:ec2-user /opt/tubeyou
+git clone https://github.com/Kattysirel/tubeyou.git /opt/tubeyou
+export PATH="$HOME/.local/bin:$PATH"
+python3.11 -m pip install --user -r /opt/tubeyou/backend/requirements.txt
 ```
 
 **b) Variables de entorno** (reemplaza los valores en MAYÚSCULAS):
@@ -155,9 +224,36 @@ chmod 600 /opt/tubeyou/backend/.env
 - Clave: ejecuta `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` y pega el resultado.
 - Nunca subas este `.env` a GitHub (ya está ignorado).
 
-**c) Crear las tablas y arrancar la API en segundo plano:**
+**c) Nginx** (recibe en el puerto 80 y reenvía a FastAPI en el 8000; permite videos de hasta 100 MB):
 ```bash
-bash /opt/tubeyou/infra/ec2/run_migrations.sh
+sudo tee /etc/nginx/conf.d/tubeyou.conf >/dev/null <<'EOF'
+server {
+    listen 80 default_server;
+    server_name _;
+
+    client_max_body_size 110m;
+    client_body_timeout 300s;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+sudo nginx -t
+sudo systemctl enable --now nginx
+```
+
+**d) Crear las tablas y arrancar la API en segundo plano.** Se entra a `backend/src` y `fastapi run`
+descubre solo `main.py` y usa el puerto 8000 (sin indicar puerto ni nombre):
+```bash
+cd /opt/tubeyou/backend
+python3.11 -c "from src import models; from src.database.database import Base, engine; Base.metadata.create_all(bind=engine); print('Tablas listas')"
 
 export PATH="$HOME/.local/bin:$PATH"
 cd /opt/tubeyou/backend/src
@@ -168,7 +264,7 @@ pm2 startup
 `pm2 startup` imprime una línea que empieza con `sudo env PATH=...`: **cópiala y ejecútala** para que la API
 arranque sola al reiniciar la EC2.
 
-**d) Comprobar:** en tu navegador abre `http://IP-API/docs`. Debe verse Swagger. (También `http://IP-API/health` → `{"status":"ok"}`.)
+**e) Comprobar:** en tu navegador abre `http://IP-API/docs`. Debe verse Swagger. (También `http://IP-API/health` → `{"status":"ok"}`.)
 Si falla: `pm2 logs fastapi` y `sudo systemctl status nginx`.
 
 **Actualizar el backend más adelante** (después de un `git push`):
@@ -187,16 +283,55 @@ pm2 restart fastapi
 *Provider type:* **OpenID Connect** · *Provider URL:* `https://token.actions.githubusercontent.com` ·
 *Audience:* `sts.amazonaws.com` → **Add provider**.
 
-**b) Política de permisos:** IAM → **Policies → Create policy → JSON** → pega
-[iam/github-deploy-policy.json](iam/github-deploy-policy.json) → Name `tubeyou-github-s3-policy` → **Create policy**.
+**b) Política de permisos:** IAM → **Policies → Create policy → JSON** → pega este JSON → Name `tubeyou-github-s3-policy` → **Create policy**.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3FrontendDeployPermissions",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:ListBucket", "s3:DeleteObject"],
+      "Resource": [
+        "arn:aws:s3:::tubeyou-frontend-TUSUFIJO",
+        "arn:aws:s3:::tubeyou-frontend-TUSUFIJO/*"
+      ]
+    }
+  ]
+}
+```
 
 **c) Rol:** IAM → **Roles → Create role**:
 1. *Trusted entity type:* **Web identity** · *Identity provider:* `token.actions.githubusercontent.com` ·
    *Audience:* `sts.amazonaws.com` → **Next**.
 2. Marca **`tubeyou-github-s3-policy`** → **Next**.
 3. Role name: **`tubeyou-github-deploy`** → **Create role**.
-4. Entra al rol → pestaña **Trust relationships** → **Edit trust policy** → reemplaza todo por
-   [iam/github-oidc-trust-policy.json](iam/github-oidc-trust-policy.json) (con tu ID de cuenta) → **Update policy**.
+4. Entra al rol → pestaña **Trust relationships** → **Edit trust policy** → reemplaza todo por este JSON (con tu ID de cuenta) → **Update policy**.
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Principal": {
+           "Federated": "arn:aws:iam::TU_ID_DE_CUENTA:oidc-provider/token.actions.githubusercontent.com"
+         },
+         "Action": "sts:AssumeRoleWithWebIdentity",
+         "Condition": {
+           "StringEquals": {
+             "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+           },
+           "StringLike": {
+             "token.actions.githubusercontent.com:sub": "repo:Kattysirel/tubeyou:*"
+           }
+         }
+       }
+     ]
+   }
+   ```
+
 5. Copia el **ARN** del rol (arriba, `arn:aws:iam::123456789012:role/tubeyou-github-deploy`).
 
 **d) GitHub:** repositorio `Kattysirel/tubeyou` → **Settings → Secrets and variables → Actions**.

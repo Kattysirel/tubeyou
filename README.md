@@ -14,39 +14,42 @@ MP4         ─► S3 Videos
 JPG/PNG     ─► S3 Miniaturas
 ```
 
-Backend: **arquitectura por capas** (cada capa es una carpeta con su responsabilidad).
+```
+TubeYou/
+├── .github/
+│   ├── pull_request_template.md
+│   └── workflows/deploy.yml        CI (PR) + CD del frontend a S3 con OIDC
+├── backend/
+│   ├── src/
+│   │   ├── core/        config.py · security.py (bcrypt, JWT, usuario actual)
+│   │   ├── crud/        user_crud.py · video_crud.py · comment_crud.py
+│   │   ├── database/    database.py (engine, sesión, Base)
+│   │   ├── models/      user_model.py · video_model.py · comment_model.py
+│   │   ├── routers/     user_router.py · video_router.py · comment_router.py
+│   │   ├── schemas/     user_schema.py · video_schema.py · comment_schema.py
+│   │   ├── services/    storage_service.py · local_service.py · s3_service.py
+│   │   └── main.py
+│   ├── tests/
+│   ├── .env-example · requirements.txt · requirements-dev.txt · pytest.ini · ruff.toml
+├── frontend/
+│   ├── public/
+│   └── src/
+│       ├── components/
+│       │   ├── atoms/       Button, Input, Avatar, Logo, Icon...
+│       │   ├── molecules/   SearchBar, VideoCard, CommentItem, FileDrop...
+│       │   ├── organisms/   Navbar, Sidebar, VideoGrid, VideoPlayer, CommentsSection...
+│       │   └── templates/   MainLayout, AuthLayout
+│       ├── context/     AuthContext · ThemeContext
+│       ├── pages/       HomePage · PlayerPage · AuthPage · ProfilePage
+│       ├── services/    api.js · userService · videoService · commentService · useApi · format
+│       ├── App.jsx · index.css · main.jsx
+├── docs/GUIA_DESPLIEGUE_AWS.md     paso a paso manual en la consola de AWS
+├── .gitignore
+└── README.md
+```
 
-```
-backend/src/
-├── config.py    configuración y variables de entorno
-├── database/    engine, sesión y Base de SQLAlchemy
-├── models/      tablas: User, Video, Comment
-├── schemas/     validación Pydantic (entrada/salida)
-├── crud/        acceso a datos (sin HTTP)
-├── routers/     endpoints FastAPI
-├── security/    bcrypt + JWT
-├── services/    almacenamiento local / S3
-└── main.py      punto de entrada
-```
-
-Frontend: **Atomic Design** (atoms → molecules → organisms → templates → pages).
-
-```
-frontend/src/
-├── components/
-│   ├── atoms/       Button, Input, Avatar, Logo, Icon...
-│   ├── molecules/   SearchBar, VideoCard, CommentItem, FileDrop...
-│   ├── organisms/   Navbar, Sidebar, VideoGrid, VideoPlayer, CommentsSection...
-│   └── templates/   MainLayout (navbar + sidebar), AuthLayout
-├── pages/       HomePage · PlayerPage · AuthPage · ProfilePage
-├── context/     AuthContext · ThemeContext
-├── hooks/       useApi
-├── services/    cliente de la API
-├── utils/       formato de fechas y vistas
-├── styles/      Tailwind + tokens de color (tema claro/oscuro)
-├── App.jsx
-└── main.jsx
-```
+Backend por capas (`core`, `crud`, `database`, `models`, `routers`, `schemas`, `services`) y frontend con
+**Atomic Design** (atoms → molecules → organisms → templates → pages).
 
 ## Páginas
 1. **Registro / Login** (`/auth`)
@@ -81,7 +84,7 @@ cd backend
 python -m venv .venv
 .venv/Scripts/activate        # Linux/Mac: source .venv/bin/activate
 pip install -r requirements-dev.txt   # incluye pytest y ruff
-cp .env.example .env          # opcional
+cp .env-example .env          # opcional
 cd src
 fastapi dev          # desarrollo con recarga automática (puerto 8000)
 ```
@@ -101,7 +104,7 @@ pm2 start "fastapi run"
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local    # VITE_API_URL=http://localhost:8000
+cp .env-example .env.local    # VITE_API_URL=http://localhost:8000
 npm run dev                   # http://localhost:5173
 ```
 
@@ -126,7 +129,7 @@ No hay claves de AWS en el código: la EC2 usa un **IAM Role** y GitHub Actions 
 
 ## Despliegue
 
-- Guía paso a paso (VPC, Security Groups, RDS, S3, IAM, EC2, OIDC) y evidencias: [infra/README.md](infra/README.md)
+- Guía manual paso a paso (S3, IAM, Security Groups, RDS, EC2, OIDC, GitHub) y evidencias: [docs/GUIA_DESPLIEGUE_AWS.md](docs/GUIA_DESPLIEGUE_AWS.md)
 - CI/CD: [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
   - PR a `main`: `ruff` + `pytest` (backend) y `npm ci`, `lint`, `build` (frontend). No despliega.
   - Push a `main`: validaciones → OIDC (sin claves) → `dist/` a S3 → verificación.

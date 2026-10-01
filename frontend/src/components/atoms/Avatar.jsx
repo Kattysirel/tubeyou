@@ -1,4 +1,4 @@
-import { colorFor, initials } from '../../utils/format.js'
+import { colorFor, initials } from '../../services/format.js'
 
 export default function Avatar({ name = '', size = 36, className = '' }) {
   return (

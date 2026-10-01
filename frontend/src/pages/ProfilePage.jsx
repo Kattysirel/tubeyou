@@ -6,7 +6,7 @@ import MainLayout from '../components/templates/MainLayout.jsx'
 import ProfileHeader from '../components/organisms/ProfileHeader.jsx'
 import UserVideoList from '../components/organisms/UserVideoList.jsx'
 import VideoFormModal from '../components/organisms/VideoFormModal.jsx'
-import useApi from '../hooks/useApi.js'
+import useApi from '../services/useApi.js'
 import { deleteVideo, listVideos } from '../services/videoService.js'
 
 export default function ProfilePage() {

@@ -3,7 +3,7 @@ import uuid
 from pathlib import PurePosixPath
 from typing import BinaryIO, Protocol
 
-from src.config import settings
+from src.core.config import settings
 
 VIDEOS = "videos"
 THUMBNAILS = "thumbnails"
@@ -21,10 +21,10 @@ def new_key(extension: str) -> str:
 
 def get_storage() -> Storage:
     if settings.STORAGE_BACKEND == "s3":
-        from src.services.s3_storage import S3Storage
+        from src.services.s3_service import S3Storage
 
         return S3Storage()
-    from src.services.local_storage import LocalStorage
+    from src.services.local_service import LocalStorage
 
     return LocalStorage()
 

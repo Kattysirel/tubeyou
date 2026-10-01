@@ -1,4 +1,4 @@
-import { timeAgo } from '../../utils/format.js'
+import { timeAgo } from '../../services/format.js'
 import Avatar from '../atoms/Avatar.jsx'
 
 export default function CommentItem({ comment }) {

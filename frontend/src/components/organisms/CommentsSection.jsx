@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
-import useApi from '../../hooks/useApi.js'
+import useApi from '../../services/useApi.js'
 import { createComment, listComments } from '../../services/commentService.js'
 import Avatar from '../atoms/Avatar.jsx'
 import Button from '../atoms/Button.jsx'

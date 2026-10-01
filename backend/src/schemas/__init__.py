@@ -1,6 +1,6 @@
-from src.schemas.comment import CommentCreate, CommentRead
-from src.schemas.user import LoginResponse, UserCreate, UserLogin, UserRead
-from src.schemas.video import VideoRead, ViewsRead
+from src.schemas.comment_schema import CommentCreate, CommentRead
+from src.schemas.user_schema import LoginResponse, UserCreate, UserLogin, UserRead
+from src.schemas.video_schema import VideoRead, ViewsRead
 
 __all__ = [
     "CommentCreate",

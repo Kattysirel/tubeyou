@@ -5,7 +5,7 @@ import Icon from '../components/atoms/Icon.jsx'
 import FilterChips from '../components/molecules/FilterChips.jsx'
 import MainLayout from '../components/templates/MainLayout.jsx'
 import VideoGrid, { VideoGridSkeleton } from '../components/organisms/VideoGrid.jsx'
-import useApi from '../hooks/useApi.js'
+import useApi from '../services/useApi.js'
 import { listVideos } from '../services/videoService.js'
 
 const CHIPS = [
