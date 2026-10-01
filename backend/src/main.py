@@ -32,6 +32,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
+    # La definicion de la API vive bajo /docs: asi el comportamiento /docs* de CloudFront (plan Gratis,
+    # maximo 5 comportamientos) sirve tanto Swagger como su definicion.
+    openapi_url="/docs/openapi.json",
     redoc_url="/redoc",
 )
 
