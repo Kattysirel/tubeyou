@@ -7,9 +7,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from src.core.config import settings
-from src.database.database import get_db
-from src.models.user_model import User
+from core.config import settings
+from database.database import get_db
+from models.user_model import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -44,7 +44,7 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     # Import local: user_crud usa hash_password de este mismo modulo (evita importacion circular)
-    from src.crud import user_crud
+    from crud import user_crud
 
     unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

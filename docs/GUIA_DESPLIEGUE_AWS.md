@@ -249,12 +249,9 @@ sudo nginx -t
 sudo systemctl enable --now nginx
 ```
 
-**d) Crear las tablas y arrancar la API en segundo plano.** Se entra a `backend/src` y `fastapi run`
-descubre solo `main.py` y usa el puerto 8000 (sin indicar puerto ni nombre):
+**d) Arrancar la API en segundo plano.** Se entra a `backend/src` y `fastapi run` descubre solo `main.py`
+y usa el puerto 8000 (no hace falta indicar puerto ni nombre). Las tablas se crean solas al iniciar:
 ```bash
-cd /opt/tubeyou/backend
-python3.11 -c "from src import models; from src.database.database import Base, engine; Base.metadata.create_all(bind=engine); print('Tablas listas')"
-
 export PATH="$HOME/.local/bin:$PATH"
 cd /opt/tubeyou/backend/src
 pm2 start "fastapi run"
@@ -356,7 +353,7 @@ Pestaña **Variables → New repository variable** (una por una):
 
 El despliegue se activa solo con un push a `main` (o a mano: **Actions → TubeYou - CI/CD (AWS) → Run workflow**).
 
-- **Pull Request a `main`:** `ruff` y `pytest` del backend; `npm ci`, `npm run lint` y `npm run build` del frontend. **No despliega.**
+- **Pull Request a `main`:** `pytest` del backend; `npm ci`, `npm run lint` y `npm run build` del frontend. **No despliega.**
 - **Push / merge a `main`:** lo anterior y, si pasa, entra a AWS con OIDC (credenciales temporales),
   sube `dist/` a S3 y comprueba que `index.html` quedó publicado. Se omite mientras no exista la variable `S3_BUCKET_NAME`.
 

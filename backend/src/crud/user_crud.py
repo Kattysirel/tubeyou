@@ -1,10 +1,10 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from src.core.security import hash_password, verify_password
-from src.models.user_model import User
-from src.models.video_model import Video
-from src.schemas.user_schema import UserCreate
+from core.security import hash_password, verify_password
+from models.user_model import User
+from models.video_model import Video
+from schemas.user_schema import UserCreate
 
 
 def get_by_id(db: Session, user_id: int) -> User | None:

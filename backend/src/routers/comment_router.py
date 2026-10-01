@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from src.core.security import get_current_user
-from src.crud import comment_crud, video_crud
-from src.database.database import get_db
-from src.models.user_model import User
-from src.schemas.comment_schema import CommentCreate, CommentRead
+from core.security import get_current_user
+from crud import comment_crud, video_crud
+from database.database import get_db
+from models.user_model import User
+from schemas.comment_schema import CommentCreate, CommentRead
 
 router = APIRouter(prefix="/videos/{video_id}/comments", tags=["Comentarios"])
 

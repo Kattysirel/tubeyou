@@ -1,7 +1,7 @@
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, joinedload
 
-from src.models.video_model import Video
+from models.video_model import Video
 
 
 def get(db: Session, video_id: int) -> Video | None:

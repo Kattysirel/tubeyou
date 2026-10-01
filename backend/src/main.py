@@ -1,12 +1,22 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+import sys
+from pathlib import Path
 
-from src import models  # noqa: F401  (registra las tablas en Base.metadata)
-from src.core.config import settings
-from src.database.database import Base, engine
-from src.routers import comment_router, user_router, video_router
+# Asegura que src/ este en sys.path: asi `cd src && fastapi run` (PM2) resuelve los modulos
+# igual en local y en la EC2.
+SRC_DIR = str(Path(__file__).resolve().parent)
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+from core.config import settings  # noqa: E402
+from database.database import Base, engine  # noqa: E402
+from models import comment_model, user_model, video_model  # noqa: E402, F401  (registra las tablas)
+from routers import comment_router, user_router, video_router  # noqa: E402
+
+# Crea las tablas en RDS / PostgreSQL (o SQLite en local) al iniciar
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(

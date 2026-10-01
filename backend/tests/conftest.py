@@ -9,13 +9,13 @@ os.environ["UPLOADS_DIR"] = str(Path(_tmp) / "uploads")
 os.environ["STORAGE_BACKEND"] = "local"
 os.environ["SECRET_KEY"] = "test-secret"
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from src.database.database import Base, engine  # noqa: E402
-from src.main import app  # noqa: E402
+from database.database import Base, engine  # noqa: E402
+from main import app  # noqa: E402
 
 
 @pytest.fixture()

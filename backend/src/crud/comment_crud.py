@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from src.models.comment_model import Comment
+from models.comment_model import Comment
 
 
 def list_for_video(db: Session, video_id: int) -> list[Comment]:

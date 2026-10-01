@@ -1,8 +1,8 @@
 import shutil
 from typing import BinaryIO
 
-from src.core.config import settings
-from src.services.storage_service import new_key
+from core.config import settings
+from services.storage_service import new_key
 
 
 class LocalStorage:

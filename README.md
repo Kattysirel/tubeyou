@@ -16,6 +16,7 @@ JPG/PNG     ─► S3 Miniaturas
 
 ```
 TubeYou/
+├── .coderabbit.yaml                revisión automática de PR con CodeRabbit
 ├── .github/
 │   ├── pull_request_template.md
 │   └── workflows/deploy.yml        CI (PR) + CD del frontend a S3 con OIDC
@@ -30,7 +31,7 @@ TubeYou/
 │   │   ├── services/    storage_service.py · local_service.py · s3_service.py
 │   │   └── main.py
 │   ├── tests/
-│   ├── .env-example · requirements.txt · requirements-dev.txt · pytest.ini · ruff.toml
+│   ├── .env-example · requirements.txt · requirements-dev.txt · pytest.ini
 ├── frontend/
 │   ├── public/
 │   └── src/
@@ -83,7 +84,7 @@ Validaciones: video solo **MP4** (máx. 100 MB); miniatura **JPG/JPEG/PNG** (má
 cd backend
 python -m venv .venv
 .venv/Scripts/activate        # Linux/Mac: source .venv/bin/activate
-pip install -r requirements-dev.txt   # incluye pytest y ruff
+pip install -r requirements-dev.txt   # incluye pytest
 cp .env-example .env          # opcional
 cd src
 fastapi dev          # desarrollo con recarga automática (puerto 8000)
@@ -91,7 +92,7 @@ fastapi dev          # desarrollo con recarga automática (puerto 8000)
 Sin `.env` usa SQLite y guarda los archivos en `backend/uploads/`. Para PostgreSQL define
 `DATABASE_URL=postgresql+psycopg://usuario:clave@localhost:5432/tubeyou`.
 
-Calidad (desde `backend/`): `ruff check .` y `python -m pytest`.
+Pruebas (desde `backend/`): `python -m pytest`.
 
 En producción (EC2) se entra a `src/` y se deja en segundo plano con PM2:
 
@@ -131,6 +132,6 @@ No hay claves de AWS en el código: la EC2 usa un **IAM Role** y GitHub Actions 
 
 - Guía manual paso a paso (S3, IAM, Security Groups, RDS, EC2, OIDC, GitHub) y evidencias: [docs/GUIA_DESPLIEGUE_AWS.md](docs/GUIA_DESPLIEGUE_AWS.md)
 - CI/CD: [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
-  - PR a `main`: `ruff` + `pytest` (backend) y `npm ci`, `lint`, `build` (frontend). No despliega.
+  - PR a `main`: `pytest` (backend) y `npm ci`, `lint`, `build` (frontend). No despliega.
   - Push a `main`: validaciones → OIDC (sin claves) → `dist/` a S3 → verificación.
   - El backend se actualiza a mano en la EC2 (`git pull` + `pm2 restart fastapi`).
