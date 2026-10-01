@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Plantilla CloudFormation para configurar AWS OIDC con GitHub Actions
+  y un Bucket S3 para despliegue automático del Frontend (React + Vite).
+
+Parameters:
+  GitHubOrgOrUser:
+    Type: String
+    Default: 'Kattysirel'
+    Description: Usuario u organización de GitHub dueño del repositorio.
+
+  GitHubRepoName:
+    Type: String
+    Default: 'tubeyou'
+    Description: Nombre del repositorio en GitHub.
+
+  S3BucketName:
+    Type: String
+    Description: Nombre único global para el bucket S3 del Frontend (solo minúsculas y guiones).
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]+[a-z0-9]$'
+
+  ExistingOIDCProviderArn:
+    Type: String
+    Default: ''
+    Description: >
+      (Opcional) Si tu cuenta de AWS ya tiene el proveedor OIDC 'token.actions.githubusercontent.com',
+      escribe su ARN aquí. Si lo dejas vacío, CloudFormation creará uno nuevo.
+
+Conditions:
+  CreateOIDCProvider: !Equals [!Ref ExistingOIDCProviderArn, '']
+
+Resources:
+  # 1. Proveedor de Identidad OIDC de GitHub (si no existe previamente)
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c5824a9fd3c7c4f773b9e4a3b827e3788f3a4a0
+
+  # 2. Bucket S3 para Hosting del Frontend SPA (React / Vite)
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html   # Soporte para React Router (SPA)
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  # 3. Política Pública para el Bucket S3 (Lectura Web)
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${FrontendBucket}/*'
+
+  # 4. Rol IAM asumido temporalmente por GitHub Actions mediante OIDC
+  GitHubActionsFrontendRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${GitHubRepoName}-GitHubActions-FrontendRole'
+      Description: Rol IAM para despliegue de frontend desde GitHub Actions usando OIDC sin claves estaticas
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateOIDCProvider
+                - !Ref GitHubOIDCProvider
+                - !Ref ExistingOIDCProviderArn
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                # Permite a GitHub Actions en tu repositorio autenticarse
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrgOrUser}/${GitHubRepoName}:*'
+      Policies:
+        - PolicyName: S3DeployPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: S3SyncPermissions
+                Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:DeleteObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${FrontendBucket}'
+                  - !Sub 'arn:aws:s3:::${FrontendBucket}/*'
+
+Outputs:
+  RoleArnToAssume:
+    Description: ARN del Rol IAM para guardar en GitHub Secrets (AWS_ROLE_ARN)
+    Value: !GetAtt GitHubActionsFrontendRole.Arn
+
+  S3BucketWebsiteURL:
+    Description: URL pública del Frontend en S3
+    Value: !GetAtt FrontendBucket.WebsiteURL
+
+  S3BucketNameOutput:
+    Description: Nombre del Bucket para guardar en GitHub Variables (S3_BUCKET_NAME)
+    Value: !Ref FrontendBucket

@@ -19,7 +19,9 @@ TubeYou/
 ├── .coderabbit.yaml                revisión automática de PR con CodeRabbit
 ├── .github/
 │   ├── pull_request_template.md
-│   └── workflows/deploy.yml        CI (PR) + CD del frontend a S3 con OIDC
+│   └── workflows/
+│       ├── frontend-ci.yml         PR: lint, build y pruebas (no despliega)
+│       └── frontend-cd.yml         push a main: OIDC → S3 (+ CloudFront opcional)
 ├── backend/
 │   ├── src/
 │   │   ├── core/        config.py · security.py (bcrypt, JWT, usuario actual)
@@ -44,7 +46,9 @@ TubeYou/
 │       ├── pages/       HomePage · PlayerPage · AuthPage · ProfilePage
 │       ├── services/    api.js · userService · videoService · commentService · useApi · format
 │       ├── App.jsx · index.css · main.jsx
+├── aws/frontend-oidc-s3-setup.yml  plantilla CloudFormation opcional (bucket + OIDC + rol)
 ├── docs/GUIA_DESPLIEGUE_AWS.md     paso a paso manual en la consola de AWS
+├── .env-example
 ├── .gitignore
 └── README.md
 ```
@@ -131,7 +135,7 @@ No hay claves de AWS en el código: la EC2 usa un **IAM Role** y GitHub Actions 
 ## Despliegue
 
 - Guía manual paso a paso (S3, IAM, Security Groups, RDS, EC2, OIDC, GitHub) y evidencias: [docs/GUIA_DESPLIEGUE_AWS.md](docs/GUIA_DESPLIEGUE_AWS.md)
-- CI/CD: [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
-  - PR a `main`: `pytest` (backend) y `npm ci`, `lint`, `build` (frontend). No despliega.
-  - Push a `main`: validaciones → OIDC (sin claves) → `dist/` a S3 → verificación.
+- CI/CD (dos workflows, como en el repositorio de referencia):
+  - [frontend-ci.yml](.github/workflows/frontend-ci.yml): en cada PR a `main` corre lint y build del frontend y las pruebas del backend. No despliega.
+  - [frontend-cd.yml](.github/workflows/frontend-cd.yml): al hacer push a `main` entra a AWS con OIDC (sin claves), sube `dist/` a S3 e invalida CloudFront si está configurado.
   - El backend se actualiza a mano en la EC2 (`git pull` + `pm2 restart fastapi`).

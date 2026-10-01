@@ -1,0 +1,94 @@
+name: Frontend CD - Deploy to AWS S3 (OIDC)
+
+# Se ejecuta al hacer push/merge a main (o manualmente).
+# El frontend se publica en S3 con credenciales temporales (OIDC): no hay claves permanentes.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-cd.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # Necesario para solicitar el token JWT OIDC a AWS STS
+  contents: read    # Necesario para hacer checkout del repositorio
+
+concurrency:
+  group: frontend-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy to S3
+    runs-on: ubuntu-latest
+    # Se omite mientras AWS no este configurado (variable S3_BUCKET_NAME vacia).
+    if: ${{ vars.S3_BUCKET_NAME != '' }}
+    permissions:
+      id-token: write
+      contents: read
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Frontend for Production
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: npm run build
+
+      - name: Inspect OIDC Token (Debug)
+        run: |
+          echo "=== Diagnosticando Token OIDC de GitHub ==="
+          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          echo "Payload JWT que GitHub envía a AWS:"
+          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{aud, iss, sub, repository, repository_owner, ref}'
+
+      - name: Authenticate with AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-skip-session-tagging: true
+
+      - name: Sync static assets to S3
+        run: |
+          echo "Sincronizando dist con S3: ${{ vars.S3_BUCKET_NAME }}..."
+          # Sincronizar archivos estáticos con caché prolongado (excluyendo index.html)
+          aws s3 sync dist s3://${{ vars.S3_BUCKET_NAME }} \
+            --delete \
+            --cache-control "max-age=31536000,public,immutable" \
+            --exclude "index.html"
+
+          # Subir index.html sin caché para que los usuarios siempre obtengan la última versión
+          aws s3 cp dist/index.html s3://${{ vars.S3_BUCKET_NAME }}/index.html \
+            --cache-control "max-age=0,no-cache,no-store,must-revalidate" \
+            --content-type "text/html; charset=utf-8"
+
+      - name: Invalidate CloudFront Cache (Optional)
+        if: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID != '' }}
+        run: |
+          echo "Invalidando caché de CloudFront..."
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+
+      - name: Verify deployment
+        run: |
+          aws s3 ls s3://${{ vars.S3_BUCKET_NAME }}/index.html
+          echo "Frontend publicado en s3://${{ vars.S3_BUCKET_NAME }}"

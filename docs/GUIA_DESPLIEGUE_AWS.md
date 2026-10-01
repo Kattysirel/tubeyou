@@ -276,6 +276,16 @@ pm2 restart fastapi
 
 ## 7. OIDC y GitHub Actions (despliegue del frontend)
 
+> **Atajo opcional con CloudFormation:** en lugar de hacer los pasos a, b y c a mano, puedes usar la plantilla
+> [`aws/frontend-oidc-s3-setup.yml`](../aws/frontend-oidc-s3-setup.yml). En la consola: **CloudFormation →
+> Create stack → With new resources → Upload a template file** → sube la plantilla → parámetro `S3BucketName`
+> (un nombre nuevo, ej. `tubeyou-frontend-TUSUFIJO`) → marca *"I acknowledge that AWS CloudFormation might create
+> IAM resources with custom names"* → **Submit**. En la pestaña **Outputs** copia `RoleArnToAssume`
+> (será tu secret `AWS_ROLE_ARN`) y `S3BucketNameOutput` (tu variable `S3_BUCKET_NAME`).
+> Si tu cuenta ya tiene el proveedor OIDC de GitHub, pega su ARN en `ExistingOIDCProviderArn`.
+> Esta plantilla crea el bucket del frontend, así que en ese caso omite el bucket del frontend del paso 1.
+> Los buckets de videos y miniaturas se siguen creando a mano.
+
 **a) Proveedor OIDC** (una sola vez por cuenta): **IAM → Identity providers → Add provider**:
 *Provider type:* **OpenID Connect** · *Provider URL:* `https://token.actions.githubusercontent.com` ·
 *Audience:* `sts.amazonaws.com` → **Add provider**.
@@ -346,16 +356,23 @@ Pestaña **Variables → New repository variable** (una por una):
 | `AWS_REGION` | `us-east-1` |
 | `S3_BUCKET_NAME` | `tubeyou-frontend-TUSUFIJO` |
 | `VITE_API_URL` | `http://IP-API` (sin barra final) |
+| `CLOUDFRONT_DISTRIBUTION_ID` | *(opcional)* solo si pones CloudFront delante del bucket |
 
 ---
 
 ## 8. Publicar el frontend
 
-El despliegue se activa solo con un push a `main` (o a mano: **Actions → TubeYou - CI/CD (AWS) → Run workflow**).
+Hay dos workflows en `.github/workflows/`, igual que en el repositorio de referencia:
 
-- **Pull Request a `main`:** `pytest` del backend; `npm ci`, `npm run lint` y `npm run build` del frontend. **No despliega.**
-- **Push / merge a `main`:** lo anterior y, si pasa, entra a AWS con OIDC (credenciales temporales),
-  sube `dist/` a S3 y comprueba que `index.html` quedó publicado. Se omite mientras no exista la variable `S3_BUCKET_NAME`.
+| Workflow | Cuándo corre | Qué hace |
+|---|---|---|
+| **`frontend-ci.yml`** (Frontend CI) | En cada **Pull Request a `main`** y manualmente | `npm ci`, `npm run lint`, `npm run build` y verifica que exista `dist/index.html`. También instala el backend y corre `pytest`. **No despliega.** |
+| **`frontend-cd.yml`** (Frontend CD) | Al hacer **push / merge a `main`** (cambios en `frontend/**`) y manualmente | Compila el frontend, entra a AWS con **OIDC** (credenciales temporales), sube `dist/` a S3 y, si definiste `CLOUDFRONT_DISTRIBUTION_ID`, invalida la caché de CloudFront. Se omite mientras no exista `S3_BUCKET_NAME`. |
+
+Para ejecutarlos a mano: pestaña **Actions** → elige el workflow → **Run workflow**.
+
+**¿Para qué sirve CloudFront?** Es opcional: una red de entrega de contenido (CDN) que se pone delante del bucket
+para dar HTTPS y cargar más rápido. Si no la usas, deja vacía la variable `CLOUDFRONT_DISTRIBUTION_ID` y ese paso se salta solo.
 
 Cuando termine en verde, abre la **Bucket website endpoint** del paso 1: ahí está TubeYou.
 Recargar `/watch/1` o `/profile` funciona porque el *Error document* es `index.html`.
@@ -412,4 +429,4 @@ Recargar `/watch/1` o `/profile` funciona porque el *Error document* es `index.h
 4. Demo: registro → login → publicar → catálogo → reproducir → comentar → recomendados.
 5. Perfil: editar y eliminar; comprobar el cambio en S3.
 6. Código: backend por capas y frontend con Atomic Design.
-7. CI/CD: `deploy.yml` y una ejecución en GitHub Actions (OIDC, sin claves).
+7. CI/CD: `frontend-ci.yml` y `frontend-cd.yml` y una ejecución en GitHub Actions (OIDC, sin claves).

@@ -23,3 +23,6 @@ frontend/dist/
 Thumbs.db
 .claude/
 *.db
+
+# Politicas/IDs de cuenta de AWS (datos sensibles)
+aws/*.json
