@@ -18,7 +18,7 @@ Backend: **arquitectura por capas** (cada capa es una carpeta con su responsabil
 
 ```
 backend/src/
-├── core/        configuración y variables de entorno
+├── config.py    configuración y variables de entorno
 ├── database/    engine, sesión y Base de SQLAlchemy
 ├── models/      tablas: User, Video, Comment
 ├── schemas/     validación Pydantic (entrada/salida)
@@ -80,7 +80,7 @@ Validaciones: video solo **MP4** (máx. 100 MB); miniatura **JPG/JPEG/PNG** (má
 cd backend
 python -m venv .venv
 .venv/Scripts/activate        # Linux/Mac: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # incluye pytest y ruff
 cp .env.example .env          # opcional
 cd src
 fastapi dev          # desarrollo con recarga automática (puerto 8000)
@@ -88,7 +88,7 @@ fastapi dev          # desarrollo con recarga automática (puerto 8000)
 Sin `.env` usa SQLite y guarda los archivos en `backend/uploads/`. Para PostgreSQL define
 `DATABASE_URL=postgresql+psycopg://usuario:clave@localhost:5432/tubeyou`.
 
-Pruebas (desde `backend/`): `python -m pytest -q`.
+Calidad (desde `backend/`): `ruff check .` y `python -m pytest`.
 
 En producción (EC2) se entra a `src/` y se deja en segundo plano con PM2:
 
@@ -126,8 +126,7 @@ No hay claves de AWS en el código: la EC2 usa un **IAM Role** y GitHub Actions 
 
 ## Despliegue
 
-- Guía paso a paso (VPC, Security Groups, RDS, S3, IAM, EC2, OIDC): [docs/AWS_SETUP.md](docs/AWS_SETUP.md)
+- Guía paso a paso (VPC, Security Groups, RDS, S3, IAM, EC2, OIDC) y evidencias: [infra/README.md](infra/README.md)
 - CI/CD: [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
   - PR a `main`: pruebas del backend + `npm ci`, `lint`, `build` (sin despliegue)
   - Push a `main`: validaciones → OIDC → `dist/` a S3 → FastAPI a EC2 (SSM) → comprobación
-- Evidencias para la entrega: [docs/EVIDENCIAS.md](docs/EVIDENCIAS.md)

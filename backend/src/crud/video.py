@@ -39,7 +39,9 @@ def recommended(db: Session, video: Video, limit: int = 12) -> list[Video]:
     return list(db.scalars(stmt))
 
 
-def create(db: Session, title: str, description: str, video_url: str, thumbnail_url: str, user_id: int) -> Video:
+def create(
+    db: Session, title: str, description: str, video_url: str, thumbnail_url: str, user_id: int
+) -> Video:
     video = Video(
         title=title,
         description=description,

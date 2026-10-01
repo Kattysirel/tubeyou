@@ -1,5 +1,4 @@
 * text=auto
 *.sh text eol=lf
-*.service text eol=lf
-deploy/nginx.conf text eol=lf
+infra/ec2/*.conf text eol=lf
 *.yml text eol=lf

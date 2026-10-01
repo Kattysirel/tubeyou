@@ -1,7 +1,7 @@
 import shutil
 from typing import BinaryIO
 
-from src.core.config import settings
+from src.config import settings
 from src.services.storage import new_key
 
 

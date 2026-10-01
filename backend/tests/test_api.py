@@ -27,12 +27,13 @@ def test_register_login_and_get_user(client):
 def test_video_crud_flow(client, auth, upload_files):
     h = auth["headers"]
     files = {k: v for k, v in upload_files.items()}
-    created = client.post("/videos", data={"title": "Mi video", "description": "desc"}, files=files, headers=h)
+    data = {"title": "Mi video", "description": "desc"}
+    created = client.post("/videos", data=data, files=files, headers=h)
     assert created.status_code == 201, created.text
     video = created.json()
     assert video["user_name"] == "Ana" and video["views"] == 0
 
-    assert client.get("/users/%d" % auth["user"]["id"]).json()["video_count"] == 1
+    assert client.get(f"/users/{auth['user']['id']}").json()["video_count"] == 1
     assert len(client.get("/videos").json()) == 1
     assert len(client.get("/videos", params={"q": "mi"}).json()) == 1
     assert client.get("/videos", params={"q": "zzz"}).json() == []
@@ -60,7 +61,8 @@ def test_video_validation_and_permissions(client, auth, upload_files):
 
     video = client.post("/videos", data={"title": "ok"}, files=upload_files, headers=h).json()
     client.post("/users", json={"name": "Beto", "email": "beto@test.com", "password": "secret123"})
-    token = client.post("/login", json={"email": "beto@test.com", "password": "secret123"}).json()["access_token"]
+    login = client.post("/login", json={"email": "beto@test.com", "password": "secret123"})
+    token = login.json()["access_token"]
     other = {"Authorization": f"Bearer {token}"}
     assert client.put(f"/videos/{video['id']}", data={"title": "hack"}, headers=other).status_code == 403
     assert client.delete(f"/videos/{video['id']}", headers=other).status_code == 403
