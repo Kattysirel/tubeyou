@@ -43,7 +43,7 @@ export function SidebarContent({ mini = false, onNavigate }) {
         )
       )}
       {!mini && (
-        <p className="px-3 pt-6 text-xs text-muted">© {new Date().getFullYear()} TubeYou · Proyecto académico</p>
+        <p className="px-3 pt-6 text-xs text-muted">© {new Date().getFullYear()} TubeYou · Desplegado en AWS con CI/CD</p>
       )}
     </nav>
   )
