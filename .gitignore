@@ -11,3 +11,6 @@ aws/*.json
 
 # Configuracion local del asistente
 .claude/
+
+# Archivos temporales de Word
+~$*
