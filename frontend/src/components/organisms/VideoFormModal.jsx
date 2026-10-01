@@ -8,17 +8,22 @@ import Modal from './Modal.jsx'
 const MAX_VIDEO = 100 * 1024 * 1024
 const MAX_THUMB = 5 * 1024 * 1024
 
+// Algunos celulares (Android) envian el archivo sin tipo MIME o como application/octet-stream:
+// por eso se valida por extension y solo se rechaza un tipo MIME que sea claramente otro.
+const GENERIC_TYPES = ['', 'application/octet-stream']
+
 function validateVideo(file) {
   if (!file) return ''
-  if (!/\.mp4$/i.test(file.name) || file.type !== 'video/mp4') return 'Solo se permiten videos en formato MP4'
+  const typeOk = GENERIC_TYPES.includes(file.type) || file.type === 'video/mp4'
+  if (!/\.mp4$/i.test(file.name) || !typeOk) return 'Solo se permiten videos en formato MP4'
   if (file.size > MAX_VIDEO) return 'El video no puede superar los 100 MB'
   return ''
 }
 
 function validateThumb(file) {
   if (!file) return ''
-  if (!/\.(jpe?g|png)$/i.test(file.name) || !['image/jpeg', 'image/png'].includes(file.type))
-    return 'Solo se permiten imágenes JPG, JPEG o PNG'
+  const typeOk = GENERIC_TYPES.includes(file.type) || ['image/jpeg', 'image/png'].includes(file.type)
+  if (!/\.(jpe?g|png)$/i.test(file.name) || !typeOk) return 'Solo se permiten imágenes JPG, JPEG o PNG'
   if (file.size > MAX_THUMB) return 'La miniatura no puede superar los 5 MB'
   return ''
 }

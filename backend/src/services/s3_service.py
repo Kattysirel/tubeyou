@@ -22,6 +22,9 @@ from core.config import (
 
 VIDEO_CONTENT_TYPES = {"video/mp4"}
 THUMBNAIL_CONTENT_TYPES = {"image/jpeg", "image/png"}
+# Algunos celulares envian el archivo sin tipo MIME o como application/octet-stream: se valida por extension.
+GENERIC_CONTENT_TYPES = {"", "application/octet-stream"}
+CONTENT_TYPE_BY_EXTENSION = {".mp4": "video/mp4", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 
 # Respaldo local (solo si no hay bucket configurado): src/static/uploads/{videos|thumbnails}
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -43,7 +46,8 @@ def get_s3_client():
 
 def _validate(file: UploadFile, extensions: set, content_types: set, max_size: int, label: str) -> str:
     extension = Path(file.filename or "").suffix.lower()
-    if extension not in extensions or file.content_type not in content_types:
+    content_type = file.content_type or ""
+    if extension not in extensions or not (content_type in content_types or content_type in GENERIC_CONTENT_TYPES):
         allowed = ", ".join(sorted(e.lstrip(".").upper() for e in extensions))
         raise HTTPException(422, f"{label}: formato no permitido (solo {allowed})")
 
@@ -77,7 +81,7 @@ def upload_file_to_s3_or_local(file: UploadFile, bucket_name: str, folder_type: 
     if bucket_name:
         try:
             get_s3_client().upload_fileobj(
-                file.file, bucket_name, filename, ExtraArgs={"ContentType": file.content_type}
+                file.file, bucket_name, filename, ExtraArgs={"ContentType": CONTENT_TYPE_BY_EXTENSION[extension]}
             )
         except (BotoCoreError, ClientError) as error:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"No se pudo subir el archivo a S3: {error}") from error
