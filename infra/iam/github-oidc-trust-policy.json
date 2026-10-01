@@ -4,7 +4,7 @@
     {
       "Effect": "Allow",
       "Principal": {
-        "Federated": "arn:aws:iam::CUENTA:oidc-provider/token.actions.githubusercontent.com"
+        "Federated": "arn:aws:iam::TU_ID_DE_CUENTA:oidc-provider/token.actions.githubusercontent.com"
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
@@ -12,7 +12,7 @@
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         },
         "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:Kattysirel/tubeyou:environment:production"
+          "token.actions.githubusercontent.com:sub": "repo:Kattysirel/tubeyou:*"
         }
       }
     }

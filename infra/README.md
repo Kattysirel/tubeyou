@@ -1,107 +1,161 @@
-# Infraestructura y despliegue en AWS
+# Guía manual de AWS (clic a clic)
+
+Todo se hace a mano desde la consola de AWS. El único paso automático es el del frontend:
+GitHub Actions publica `dist/` en S3 usando OIDC (lógica igual a la del repositorio de referencia
+[LeirBaGMC/API-con-EC2](https://github.com/LeirBaGMC/API-con-EC2)). El backend se actualiza a mano en la EC2.
 
 ```
-infra/
-├── ec2/
-│   ├── nginx-tubeyou.conf     Nginx: puerto 80 → FastAPI (8000), videos hasta 100 MB
-│   ├── setup_ec2.sh           preparación única de la EC2
-│   ├── run_migrations.sh      crea las tablas en RDS
-│   └── deploy_backend.sh      lo ejecuta GitHub Actions: git reset + pip + pm2 restart
-├── iam/
-│   ├── ec2-role-s3-policy.json       permisos de la EC2 sobre los buckets de videos y miniaturas
-│   ├── github-deploy-policy.json     permisos del rol de GitHub (S3 frontend + SSM)
-│   └── github-oidc-trust-policy.json política de confianza OIDC (sin claves permanentes)
-└── s3/
-    ├── frontend-bucket-policy.json   lectura pública del sitio
-    └── media-buckets-policy.json     lectura pública de videos y miniaturas
+Navegador ─► S3 Frontend (sitio web)
+         └─► EC2 (Nginx :80 → PM2 + FastAPI :8000) ─► RDS PostgreSQL
+                                                    ├─► S3 Videos
+                                                    └─► S3 Miniaturas
 ```
 
-Arquitectura destino:
+**Reglas para toda la guía**
+- Trabaja siempre en **una sola región** (esquina superior derecha de la consola). Recomendada: **US East (N. Virginia) `us-east-1`**.
+- Los nombres de bucket son únicos en todo el mundo: reemplaza **`TUSUFIJO`** por algo tuyo (ej. `sirel`). Ejemplo: `tubeyou-frontend-sirel`.
+- Los archivos de `infra/iam` e `infra/s3` son los JSON para copiar y pegar. Reemplaza en ellos `TUSUFIJO` y `TU_ID_DE_CUENTA`.
+- Tu **ID de cuenta** (12 dígitos): clic en tu nombre arriba a la derecha → aparece debajo de "Account ID".
 
-```
-S3 Frontend (dist/)  ──►  Navegador  ──►  EC2 (Nginx :80 → PM2 + FastAPI :8000)
-                                              ├──► RDS PostgreSQL (subred privada)
-                                              ├──► S3 Videos      (MP4)
-                                              └──► S3 Miniaturas  (JPG/JPEG/PNG)
-```
+Orden: **1 S3 → 2 IAM (rol de la EC2) → 3 Red/Security Groups → 4 RDS → 5 EC2 → 6 backend en la EC2 → 7 OIDC + GitHub → 8 frontend**.
 
-Sustituye `REGION`, `CUENTA`, `ID-INSTANCIA` y los nombres de bucket (`tubeyou-frontend`,
-`tubeyou-videos`, `tubeyou-miniaturas`) por los tuyos en los archivos JSON.
-**Ninguna credencial de AWS se escribe en el código**: la EC2 usa un *IAM Role* y GitHub usa *OIDC*.
+---
 
-## 1. Red (VPC y Security Groups)
+## 1. Los 3 buckets S3
 
-Puedes usar la VPC por defecto o crear una con subredes públicas (EC2) y privadas (RDS).
+Busca **S3** en la barra superior → **Create bucket**. Repite 3 veces:
 
-| Security Group | Entrada |
+| Nombre | Para qué |
 |---|---|
-| `sg-ec2` | TCP 80 (y 443 si usas HTTPS) desde `0.0.0.0/0`. SSH 22 solo desde tu IP (opcional, el despliegue usa SSM) |
-| `sg-rds` | TCP 5432 **solo desde `sg-ec2`** (origen = el propio grupo, no una IP) |
+| `tubeyou-frontend-TUSUFIJO` | Solo el contenido de `dist/` |
+| `tubeyou-videos-TUSUFIJO` | MP4 |
+| `tubeyou-miniaturas-TUSUFIJO` | JPG / JPEG / PNG |
 
-RDS con **Public access = No**.
+En cada uno:
+1. **Bucket name:** el nombre de la tabla. **AWS Region:** la misma de siempre.
+2. **Object Ownership:** deja *ACLs disabled*.
+3. **Block Public Access settings:** **desmarca "Block all public access"** y marca el recuadro de
+   confirmación *"I acknowledge that the current settings might result in this bucket and the objects within becoming public"*.
+4. **Create bucket**.
 
-## 2. RDS (PostgreSQL)
+**Política de lectura pública** (en cada bucket): clic en el bucket → pestaña **Permissions** →
+**Bucket policy** → **Edit** → pega el JSON → **Save changes**.
+- Frontend → [s3/frontend-bucket-policy.json](s3/frontend-bucket-policy.json)
+- Videos → [s3/videos-bucket-policy.json](s3/videos-bucket-policy.json)
+- Miniaturas → [s3/miniaturas-bucket-policy.json](s3/miniaturas-bucket-policy.json)
 
-1. Crear instancia PostgreSQL (`db.t3.micro` / free tier), base de datos inicial `tubeyou`.
-2. Asociarle `sg-rds`, misma VPC que la EC2.
-3. `DATABASE_URL=postgresql+psycopg://USUARIO:CLAVE@ENDPOINT-RDS:5432/tubeyou`
+**Sitio web del frontend:** bucket `tubeyou-frontend-TUSUFIJO` → pestaña **Properties** → baja hasta
+**Static website hosting** → **Edit** → **Enable** → *Hosting type: Host a static website* →
+**Index document:** `index.html` · **Error document:** `index.html` → **Save changes**.
+Copia la **Bucket website endpoint** (la URL `http://...s3-website-us-east-1.amazonaws.com`): la usarás en el paso 6.
 
-## 3. Buckets S3 (3)
+> Si "Edit" de la política sale en gris o da error de acceso público: en el menú izquierdo de S3 →
+> **Block Public Access settings for this account** → **Edit** → desmarca todo → **Save**.
 
-| Bucket | Contenido | Acceso |
-|---|---|---|
-| `tubeyou-frontend` | Solo el contenido de `dist/` | Sitio web estático |
-| `tubeyou-videos` | MP4 (máx. 100 MB) | Lectura pública de objetos |
-| `tubeyou-miniaturas` | JPG / JPEG / PNG | Lectura pública de objetos |
+---
 
-Para cada bucket: *Permissions → Block public access → desactivar* y pegar la política:
-[s3/frontend-bucket-policy.json](s3/frontend-bucket-policy.json) en el bucket del frontend y
-[s3/media-buckets-policy.json](s3/media-buckets-policy.json) en los de videos y miniaturas
-(en esta última, deja en `Resource` solo el ARN del bucket al que se la pegas).
+## 2. Rol de la EC2 (para que suba archivos a S3 sin claves)
 
-**Frontend:** *Properties → Static website hosting → Enable*, `Index document = index.html` y
-`Error document = index.html` (así funcionan rutas como `/watch/3` al recargar).
-Nunca subas `src/`, `node_modules/` ni `package.json` a ese bucket.
+**a) Política.** Busca **IAM** → menú izquierdo **Policies** → **Create policy** → pestaña **JSON** →
+pega [iam/ec2-role-s3-policy.json](iam/ec2-role-s3-policy.json) → **Next** → Policy name: `tubeyou-ec2-s3-policy` → **Create policy**.
 
-## 4. IAM Role de la EC2
+**b) Rol.** IAM → **Roles** → **Create role**:
+1. *Trusted entity type:* **AWS service** · *Use case:* **EC2** → **Next**.
+2. Busca y marca **`tubeyou-ec2-s3-policy`** → **Next**.
+3. Role name: **`tubeyou-ec2-role`** → **Create role**.
 
-Crea el rol `tubeyou-ec2-role` (servicio de confianza: EC2) y adjunta:
+---
 
-- `AmazonSSMManagedInstanceCore` (permite desplegar desde GitHub sin SSH).
-- La política [iam/ec2-role-s3-policy.json](iam/ec2-role-s3-policy.json).
+## 3. Security Groups (firewalls)
 
-Asócialo a la instancia (*Actions → Security → Modify IAM role*). `boto3` toma las credenciales
-temporales del rol automáticamente.
+Busca **EC2** → menú izquierdo **Security Groups** → **Create security group**.
 
-## 5. EC2 (FastAPI con PM2)
+**sg-ec2** (para el servidor):
+- Name: `sg-ec2` · Description: `API TubeYou` · VPC: la *default*.
+- **Inbound rules → Add rule:**
+  - Type **HTTP** · Source **Anywhere-IPv4** (`0.0.0.0/0`)
+  - Type **SSH** · Source **My IP**
+- **Create security group**.
 
-Amazon Linux 2023, `t3.micro`, con `sg-ec2` y el rol anterior. Por SSH o Session Manager:
+**sg-rds** (para la base de datos):
+- Name: `sg-rds` · Description: `PostgreSQL TubeYou` · VPC: la *default*.
+- **Inbound rules → Add rule:** Type **PostgreSQL** (puerto 5432) · Source **Custom** → escribe `sg` y elige **`sg-ec2`**
+  (el grupo, no una IP).
+- **Create security group**.
 
+---
+
+## 4. Base de datos RDS (PostgreSQL)
+
+Busca **RDS** → **Create database**:
+1. **Standard create** · Engine: **PostgreSQL**.
+2. **Templates:** **Free tier** (o *Sandbox*).
+3. **DB instance identifier:** `tubeyou-db`.
+4. **Master username:** `postgres` · **Credentials management: Self managed** → escribe y **anota la contraseña**.
+5. **Instance configuration:** `db.t3.micro` (o la que permita el free tier).
+6. **Storage:** 20 GiB, sin autoscaling.
+7. **Connectivity:** *Don't connect to an EC2 compute resource* · VPC *default* · **Public access: No** ·
+   **Existing VPC security groups:** quita *default* y elige **`sg-rds`**.
+8. Abre **Additional configuration** → **Initial database name:** `tubeyou` (importante, si no lo pones no se crea).
+9. Desmarca backups/monitoring si quieres ahorrar → **Create database**.
+
+Espera a que el estado sea **Available** (≈10 min). Clic en `tubeyou-db` → pestaña **Connectivity & security** →
+copia el **Endpoint** (`tubeyou-db.xxxx.us-east-1.rds.amazonaws.com`).
+
+Tu `DATABASE_URL` será:
+`postgresql+psycopg://postgres:TU_CONTRASEÑA@ENDPOINT:5432/tubeyou`
+(si la contraseña tiene `@`, `:` o `/`, cámbiala por una sin símbolos especiales).
+
+---
+
+## 5. Servidor EC2
+
+EC2 → **Instances** → **Launch instances**:
+1. **Name:** `tubeyou-api`.
+2. **AMI:** **Amazon Linux 2023**.
+3. **Instance type:** `t3.micro` (free tier).
+4. **Key pair:** *Proceed without a key pair* (nos conectaremos desde el navegador).
+5. **Network settings → Edit:** VPC *default* · Auto-assign public IP **Enable** ·
+   *Select existing security group* → **`sg-ec2`**.
+6. **Configure storage:** 20 GiB gp3.
+7. **Advanced details → IAM instance profile:** **`tubeyou-ec2-role`**.
+8. **Launch instance**.
+
+**IP fija (recomendado, para que la URL de la API no cambie al reiniciar):** EC2 → **Elastic IPs** →
+**Allocate Elastic IP address** → **Allocate** → marca la IP → **Actions → Associate Elastic IP address** →
+elige la instancia `tubeyou-api` → **Associate**. Esa será tu **IP pública** (`IP-API`).
+
+---
+
+## 6. Backend en la EC2
+
+EC2 → **Instances** → marca `tubeyou-api` → **Connect** → pestaña **EC2 Instance Connect** → **Connect**.
+Se abre una terminal en el navegador. Pega estos bloques:
+
+**a) Instalar todo** (git, nginx, node, python, pm2) y clonar el repositorio:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kattysirel/tubeyou/main/infra/ec2/setup_ec2.sh -o setup_ec2.sh
 bash setup_ec2.sh https://github.com/Kattysirel/tubeyou.git
 ```
 
-Variables de entorno (**fuera del repositorio**; `.env` está en `.gitignore`):
-
+**b) Variables de entorno** (reemplaza los valores en MAYÚSCULAS):
 ```bash
 cat > /opt/tubeyou/backend/.env <<'EOF'
-DATABASE_URL=postgresql+psycopg://USUARIO:CLAVE@ENDPOINT-RDS:5432/tubeyou
-SECRET_KEY=<cadena-aleatoria-larga>
-CORS_ORIGINS=http://tubeyou-frontend.s3-website-REGION.amazonaws.com
+DATABASE_URL=postgresql+psycopg://postgres:TU_CONTRASEÑA@ENDPOINT-RDS:5432/tubeyou
+SECRET_KEY=PEGA_AQUI_UNA_CLAVE_LARGA
+CORS_ORIGINS=http://URL-DEL-SITIO-S3
 STORAGE_BACKEND=s3
-AWS_REGION=REGION
-S3_VIDEOS_BUCKET=tubeyou-videos
-S3_THUMBS_BUCKET=tubeyou-miniaturas
+AWS_REGION=us-east-1
+S3_VIDEOS_BUCKET=tubeyou-videos-TUSUFIJO
+S3_THUMBS_BUCKET=tubeyou-miniaturas-TUSUFIJO
 EOF
 chmod 600 /opt/tubeyou/backend/.env
 ```
+- `CORS_ORIGINS` = la **Bucket website endpoint** del paso 1, **sin barra final** (empieza con `http://`).
+- Clave: ejecuta `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` y pega el resultado.
+- Nunca subas este `.env` a GitHub (ya está ignorado).
 
-Generar `SECRET_KEY`: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
-
-Crear las tablas y arrancar la API en segundo plano. Se entra a `backend/src` y `fastapi run`
-descubre solo `main.py` y usa el puerto 8000:
-
+**c) Crear las tablas y arrancar la API en segundo plano:**
 ```bash
 bash /opt/tubeyou/infra/ec2/run_migrations.sh
 
@@ -109,50 +163,93 @@ export PATH="$HOME/.local/bin:$PATH"
 cd /opt/tubeyou/backend/src
 pm2 start "fastapi run"
 pm2 save
-pm2 startup        # ejecuta la línea que imprime, para que arranque al reiniciar la EC2
+pm2 startup
+```
+`pm2 startup` imprime una línea que empieza con `sudo env PATH=...`: **cópiala y ejecútala** para que la API
+arranque sola al reiniciar la EC2.
+
+**d) Comprobar:** en tu navegador abre `http://IP-API/docs`. Debe verse Swagger. (También `http://IP-API/health` → `{"status":"ok"}`.)
+Si falla: `pm2 logs fastapi` y `sudo systemctl status nginx`.
+
+**Actualizar el backend más adelante** (después de un `git push`):
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+cd /opt/tubeyou && git pull
+python3.11 -m pip install --user -r backend/requirements.txt
+pm2 restart fastapi
 ```
 
-Útiles: `pm2 list`, `pm2 logs fastapi`, `pm2 restart fastapi`.
-La API queda en `http://IP-PUBLICA/docs`.
+---
 
-## 6. GitHub Actions + OIDC (puntos extra)
+## 7. OIDC y GitHub Actions (despliegue del frontend)
 
-**a) Proveedor OIDC** (una vez por cuenta): IAM → Identity providers → *OpenID Connect* →
-URL `https://token.actions.githubusercontent.com`, audiencia `sts.amazonaws.com`.
+**a) Proveedor OIDC** (una sola vez por cuenta): **IAM → Identity providers → Add provider**:
+*Provider type:* **OpenID Connect** · *Provider URL:* `https://token.actions.githubusercontent.com` ·
+*Audience:* `sts.amazonaws.com` → **Add provider**.
 
-**b) Rol `tubeyou-github-deploy`:**
-- Política de confianza: [iam/github-oidc-trust-policy.json](iam/github-oidc-trust-policy.json)
-  (el job de despliegue usa `environment: production`, por eso el `sub` termina en `environment:production`).
-- Permisos: [iam/github-deploy-policy.json](iam/github-deploy-policy.json).
+**b) Política de permisos:** IAM → **Policies → Create policy → JSON** → pega
+[iam/github-deploy-policy.json](iam/github-deploy-policy.json) → Name `tubeyou-github-s3-policy` → **Create policy**.
 
-**c) Variables del repositorio** (*Settings → Secrets and variables → Actions → Variables*; no son secretos):
+**c) Rol:** IAM → **Roles → Create role**:
+1. *Trusted entity type:* **Web identity** · *Identity provider:* `token.actions.githubusercontent.com` ·
+   *Audience:* `sts.amazonaws.com` → **Next**.
+2. Marca **`tubeyou-github-s3-policy`** → **Next**.
+3. Role name: **`tubeyou-github-deploy`** → **Create role**.
+4. Entra al rol → pestaña **Trust relationships** → **Edit trust policy** → reemplaza todo por
+   [iam/github-oidc-trust-policy.json](iam/github-oidc-trust-policy.json) (con tu ID de cuenta) → **Update policy**.
+5. Copia el **ARN** del rol (arriba, `arn:aws:iam::123456789012:role/tubeyou-github-deploy`).
 
-| Variable | Ejemplo |
+**d) GitHub:** repositorio `Kattysirel/tubeyou` → **Settings → Secrets and variables → Actions**.
+
+Pestaña **Secrets → New repository secret:**
+
+| Name | Value |
+|---|---|
+| `AWS_ROLE_ARN` | el ARN del paso c.5 |
+
+Pestaña **Variables → New repository variable** (una por una):
+
+| Name | Value |
 |---|---|
 | `AWS_REGION` | `us-east-1` |
-| `AWS_ROLE_ARN` | `arn:aws:iam::CUENTA:role/tubeyou-github-deploy` |
-| `S3_FRONTEND_BUCKET` | `tubeyou-frontend` |
-| `EC2_INSTANCE_ID` | `i-0abc...` |
-| `API_URL` | `http://IP-PUBLICA` (sin barra final) |
-| `FRONTEND_URL` | `http://tubeyou-frontend.s3-website-REGION.amazonaws.com` |
+| `S3_BUCKET_NAME` | `tubeyou-frontend-TUSUFIJO` |
+| `VITE_API_URL` | `http://IP-API` (sin barra final) |
 
-**d)** Crea el *Environment* `production` (Settings → Environments).
+---
 
-**Comportamiento de [deploy.yml](../.github/workflows/deploy.yml):**
+## 8. Publicar el frontend
 
-- **Pull Request a `main`:** `ruff` y `pytest` en el backend; `npm ci`, `npm run lint` y `npm run build`
-  en el frontend. **No despliega.**
-- **Push / merge a `main`:** lo anterior y, si pasa, asume el rol por OIDC, sube `dist/` a S3,
-  actualiza la EC2 vía SSM (`deploy_backend.sh`) y comprueba `/health`, `/docs`, `/videos` y el sitio.
-  Se omite mientras no exista la variable `AWS_ROLE_ARN`.
-- **workflow_dispatch:** ejecución manual (despliega solo desde `main`).
+El despliegue se activa solo con un push a `main` (o a mano: **Actions → TubeYou - CI/CD (AWS) → Run workflow**).
 
-## 7. Comprobación final
+- **Pull Request a `main`:** `ruff` y `pytest` del backend; `npm ci`, `npm run lint` y `npm run build` del frontend. **No despliega.**
+- **Push / merge a `main`:** lo anterior y, si pasa, entra a AWS con OIDC (credenciales temporales),
+  sube `dist/` a S3 y comprueba que `index.html` quedó publicado. Se omite mientras no exista la variable `S3_BUCKET_NAME`.
 
-1. `http://IP-PUBLICA/docs` muestra Swagger.
-2. Abre la URL del frontend, regístrate, publica un video y confirma que los archivos aparecen en los
-   buckets de Videos y Miniaturas y las filas en RDS.
-3. Recarga `/watch/1` y `/profile` (deben abrir gracias al error document `index.html`).
+Cuando termine en verde, abre la **Bucket website endpoint** del paso 1: ahí está TubeYou.
+Recargar `/watch/1` o `/profile` funciona porque el *Error document* es `index.html`.
+
+> Si cambias `VITE_API_URL` o la IP de la API, vuelve a ejecutar el workflow para recompilar el frontend.
+
+---
+
+## 9. Comprobación final
+
+1. `http://IP-API/docs` muestra Swagger.
+2. En el sitio S3: crea una cuenta, inicia sesión, publica un video (MP4 + imagen), reprodúcelo y comenta.
+3. En S3 verás el archivo en `tubeyou-videos-TUSUFIJO` y la imagen en `tubeyou-miniaturas-TUSUFIJO`.
+4. Tema claro/oscuro con el ícono de luna/sol.
+
+**Si algo falla**
+
+| Síntoma | Causa probable |
+|---|---|
+| El sitio carga pero no muestra videos / "No se pudo conectar" | `VITE_API_URL` incorrecta, o la API caída (`pm2 list`) |
+| Error CORS en la consola del navegador | `CORS_ORIGINS` no coincide exactamente con la URL del sitio S3 |
+| `/docs` no abre | Falta la regla HTTP en `sg-ec2`, o `pm2`/`nginx` detenidos |
+| La API no conecta a la base | `sg-rds` sin regla desde `sg-ec2`, o contraseña/endpoint mal en `.env` |
+| Falla la subida de videos | Falta el rol `tubeyou-ec2-role` en la EC2, o nombres de bucket distintos en `.env` |
+| El video sube pero no se ve | Falta la política de lectura pública del bucket de videos/miniaturas |
+| Actions: "Not authorized to perform sts:AssumeRoleWithWebIdentity" | El `sub` de la política de confianza no es `repo:Kattysirel/tubeyou:*` |
 
 ---
 
@@ -161,7 +258,7 @@ URL `https://token.actions.githubusercontent.com`, audiencia `sts.amazonaws.com`
 ## Enlaces
 - [ ] Repositorio GitHub: `https://github.com/Kattysirel/tubeyou`
 - [ ] URL pública de la SPA (S3 Frontend)
-- [ ] URL pública de FastAPI: `http://IP-PUBLICA/docs`
+- [ ] URL pública de FastAPI: `http://IP-API/docs`
 
 ## Infraestructura AWS
 - [ ] **EC2:** instancia en ejecución (ID, IP pública, Security Group, IAM Role)
@@ -170,11 +267,11 @@ URL `https://token.actions.githubusercontent.com`, audiencia `sts.amazonaws.com`
 - [ ] **S3 Videos:** archivos `.mp4`
 - [ ] **S3 Miniaturas:** archivos `.jpg/.jpeg/.png`
 - [ ] **IAM:** rol de la EC2 y rol de GitHub (OIDC)
-- [ ] **GitHub Actions:** ejecución verde de `deploy.yml` (PR sin despliegue y push a `main` con despliegue)
+- [ ] **GitHub Actions:** ejecución verde (PR sin despliegue y push a `main` con despliegue)
 
 ## Funcionamiento
 - [ ] Registro · [ ] Login · [ ] Catálogo · [ ] Reproducción · [ ] Comentarios · [ ] Recomendados
-- [ ] Perfil (datos, cantidad de videos, lista) · [ ] Publicar · [ ] Editar · [ ] Eliminar · [ ] Tema claro/oscuro
+- [ ] Perfil · [ ] Publicar · [ ] Editar · [ ] Eliminar · [ ] Tema claro/oscuro
 
 ## Guion del video explicativo (5–8 min)
 1. Arquitectura: SPA en S3 → FastAPI en EC2 → RDS y buckets S3.
@@ -182,5 +279,5 @@ URL `https://token.actions.githubusercontent.com`, audiencia `sts.amazonaws.com`
 3. `/docs` de FastAPI: los endpoints mínimos.
 4. Demo: registro → login → publicar → catálogo → reproducir → comentar → recomendados.
 5. Perfil: editar y eliminar; comprobar el cambio en S3.
-6. Código: backend por capas (`crud/`, `database/`, `models/`, `routers/`, `schemas/`) y frontend con Atomic Design.
+6. Código: backend por capas y frontend con Atomic Design.
 7. CI/CD: `deploy.yml` y una ejecución en GitHub Actions (OIDC, sin claves).

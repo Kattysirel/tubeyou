@@ -21,7 +21,8 @@ python3.11 -m pip install --user -r "$APP_DIR/backend/requirements.txt"
 
 # Nginx: puerto 80 -> FastAPI (8000)
 sudo cp "$APP_DIR/infra/ec2/nginx-tubeyou.conf" /etc/nginx/conf.d/tubeyou.conf
+sudo nginx -t
 sudo systemctl enable --now nginx
 
-echo "Listo. Siguiente paso: crear $APP_DIR/backend/.env y ejecutar deploy_backend.sh"
+echo "Listo. Siguiente paso: crear $APP_DIR/backend/.env , luego run_migrations.sh y pm2 start (ver infra/README.md, paso 6)"
 echo "Para que PM2 arranque con la EC2 ejecuta: pm2 startup   (y la linea que imprime)"

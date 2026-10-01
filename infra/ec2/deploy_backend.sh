@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Se ejecuta EN LA EC2 como ec2-user (lo lanza GitHub Actions mediante AWS Systems Manager).
-# Uso: deploy_backend.sh <commit-sha>
+# Atajo OPCIONAL para actualizar el backend a mano, EN LA EC2 como ec2-user.
+# Uso: bash /opt/tubeyou/infra/ec2/deploy_backend.sh origin/main
 #
 # La API corre en segundo plano con PM2, desde la carpeta backend/src:
 #     cd /opt/tubeyou/backend/src && pm2 start "fastapi run"

@@ -128,5 +128,6 @@ No hay claves de AWS en el código: la EC2 usa un **IAM Role** y GitHub Actions 
 
 - Guía paso a paso (VPC, Security Groups, RDS, S3, IAM, EC2, OIDC) y evidencias: [infra/README.md](infra/README.md)
 - CI/CD: [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
-  - PR a `main`: pruebas del backend + `npm ci`, `lint`, `build` (sin despliegue)
-  - Push a `main`: validaciones → OIDC → `dist/` a S3 → FastAPI a EC2 (SSM) → comprobación
+  - PR a `main`: `ruff` + `pytest` (backend) y `npm ci`, `lint`, `build` (frontend). No despliega.
+  - Push a `main`: validaciones → OIDC (sin claves) → `dist/` a S3 → verificación.
+  - El backend se actualiza a mano en la EC2 (`git pull` + `pm2 restart fastapi`).
