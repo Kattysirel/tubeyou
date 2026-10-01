@@ -19,11 +19,11 @@ def create_database():
 
     try:
         SQLModel.metadata.create_all(engine)
-        print(f"[DATABASE] Conectada ({DATABASE_URL.split('@')[-1]})")
+        print(f"[DATABASE] Conectada ({DATABASE_URL.split('@')[-1]})", flush=True)
     except Exception as error:
-        print(f"[DATABASE] No se pudo conectar a PostgreSQL ({error}).")
+        print(f"[DATABASE] No se pudo conectar a PostgreSQL ({error}).", flush=True)
         if not DATABASE_URL.startswith("sqlite"):
-            print("[DATABASE] Usando SQLite local (dev_local.db) para desarrollo.")
+            print("[DATABASE] Usando SQLite local (dev_local.db) para desarrollo.", flush=True)
             engine = create_engine("sqlite:///./dev_local.db", connect_args={"check_same_thread": False})
             SQLModel.metadata.create_all(engine)
 
