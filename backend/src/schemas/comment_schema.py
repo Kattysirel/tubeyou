@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
 class CommentCreate(BaseModel):
@@ -8,11 +9,12 @@ class CommentCreate(BaseModel):
 
 
 class CommentRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     content: str
     user_id: int
-    user_name: str
     video_id: int
     created_at: datetime
+    user_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True

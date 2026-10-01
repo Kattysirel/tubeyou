@@ -17,7 +17,7 @@ export default function HomePage() {
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
   const sort = params.get('sort') === 'popular' ? 'popular' : 'recent'
-  const { data, loading, error, reload } = useApi(() => listVideos({ q, sort }), `${q}|${sort}`)
+  const { data, loading, error, reload } = useApi(() => listVideos({ search: q, sort }), `${q}|${sort}`)
   const videos = data ?? []
 
   const changeSort = useCallback(

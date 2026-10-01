@@ -1,27 +1,13 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Text
-from sqlalchemy.orm import relationship
-
-from database.database import Base
+from sqlmodel import Field, SQLModel
 
 
-def _now():
-    return datetime.now(UTC)
-
-
-class Comment(Base):
+class Comment(SQLModel, table=True):
     __tablename__ = "comments"
 
-    id = Column(Integer, primary_key=True, index=True)
-    content = Column(Text, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    video_id = Column(Integer, ForeignKey("videos.id", ondelete="CASCADE"), nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
-
-    user = relationship("User", back_populates="comments")
-    video = relationship("Video", back_populates="comments")
-
-    @property
-    def user_name(self) -> str:
-        return self.user.name if self.user else ""
+    id: int | None = Field(default=None, primary_key=True)
+    content: str
+    user_id: int = Field(foreign_key="users.id", index=True)
+    video_id: int = Field(foreign_key="videos.id", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

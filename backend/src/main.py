@@ -1,47 +1,65 @@
+import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-# Asegura que src/ este en sys.path: asi `cd src && fastapi run` (PM2) resuelve los modulos
-# igual en local y en la EC2.
-SRC_DIR = str(Path(__file__).resolve().parent)
-if SRC_DIR not in sys.path:
-    sys.path.insert(0, SRC_DIR)
+# Asegurar que el directorio 'src' este en sys.path: asi `cd src && fastapi run` (PM2) resuelve
+# los modulos igual en local y en la EC2.
+src_dir = str(Path(__file__).parent.resolve())
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
-from core.config import settings  # noqa: E402
-from database.database import Base, engine  # noqa: E402
-from models import comment_model, user_model, video_model  # noqa: E402, F401  (registra las tablas)
-from routers import comment_router, user_router, video_router  # noqa: E402
+from database.database import create_database  # noqa: E402
+from routers.comment_router import router as comment_router  # noqa: E402
+from routers.user_router import router as user_router  # noqa: E402
+from routers.video_router import router as video_router  # noqa: E402
 
-# Crea las tablas en RDS / PostgreSQL (o SQLite en local) al iniciar
-Base.metadata.create_all(bind=engine)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Crear las tablas en Amazon RDS / PostgreSQL al iniciar
+    create_database()
+    yield
+
 
 app = FastAPI(
     title="TubeYou API",
-    description="API de la plataforma de videos TubeYou (FastAPI + PostgreSQL + S3).",
+    description="API REST de la plataforma de videos TubeYou (React + FastAPI + Amazon S3 + EC2 + Amazon RDS)",
     version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
+# CORS para permitir peticiones desde la SPA en React (S3 o local)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(user_router.router)
-app.include_router(video_router.router)
-app.include_router(comment_router.router)
+# Directorio estatico: respaldo local de archivos cuando no hay buckets de S3 configurados
+static_dir = Path(src_dir) / "static"
+os.makedirs(static_dir / "uploads" / "videos", exist_ok=True)
+os.makedirs(static_dir / "uploads" / "thumbnails", exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-if settings.STORAGE_BACKEND == "local":
-    settings.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=settings.UPLOADS_DIR), name="uploads")
+# Registro de routers
+app.include_router(user_router)
+app.include_router(video_router)
+app.include_router(comment_router)
 
 
-@app.get("/health", tags=["Sistema"])
-def health():
-    return {"status": "ok"}
+@app.get("/", tags=["Health"])
+def root():
+    return {
+        "message": "TubeYou API funcionando correctamente en Amazon EC2",
+        "docs": "/docs",
+        "status": "online",
+    }

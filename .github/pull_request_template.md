@@ -1,14 +1,16 @@
-## Descripción
-<!-- ¿Qué cambia y por qué? -->
+## 📌 Resumen del Cambio
+<!-- Explica brevemente qué mejoras o correcciones incluye este PR -->
 
-## Tipo de cambio
-- [ ] Nueva funcionalidad
-- [ ] Corrección de error
-- [ ] Refactor / estructura
-- [ ] Despliegue / CI
+## 🛠 Tipo de Cambio
+- [ ] 🚀 Nueva funcionalidad (Feature)
+- [ ] 🐛 Corrección de error (Bug fix)
+- [ ] 💅 Refactorización o mejora visual / UI
+- [ ] ⚙️ Configuración / Infraestructura / CI-CD
 
-## Lista de verificación
-- [ ] Backend: `python -m pytest` en verde
-- [ ] Frontend: `npm run lint` y `npm run build` en verde
-- [ ] No incluye claves, contraseñas ni archivos `.env`
-- [ ] Probé el cambio en el navegador
+## ✅ Checklist de Validación
+- [ ] He verificado el código localmente (`npm run lint` y `npm run build`).
+- [ ] No se subieron claves secretas, contraseñas ni credenciales en el código.
+- [ ] Los tests o compilaciones pasaron exitosamente.
+
+## 🤖 Notas para el Reviewer / Agente
+<!-- Información clave para quien revise el PR -->

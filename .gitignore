@@ -1,28 +1,13 @@
-# Secretos y configuración local
-.env
-.env.*
-!.env-example
-*.pem
-
-# Python
+.venv/
+venv/
 __pycache__/
 *.pyc
-.venv/
-.pytest_cache/
-backend/tubeyou.db
-backend/uploads/
-
-# Node
-node_modules/
-frontend/dist/
-
-# Editor / SO
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-.claude/
 *.db
+.env
+static/uploads/
 
-# Politicas/IDs de cuenta de AWS (datos sensibles)
+# AWS IAM Policies (datos sensibles / account IDs)
 aws/*.json
+
+# Configuracion local del asistente
+.claude/

@@ -10,8 +10,8 @@ function toForm({ title, description, video, thumbnail }) {
   const form = new FormData()
   if (title !== undefined) form.append('title', title)
   if (description !== undefined) form.append('description', description)
-  if (video) form.append('video', video)
-  if (thumbnail) form.append('thumbnail', thumbnail)
+  if (video) form.append('video_file', video)
+  if (thumbnail) form.append('thumbnail_file', thumbnail)
   return form
 }
 

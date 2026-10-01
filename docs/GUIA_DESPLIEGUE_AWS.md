@@ -161,15 +161,14 @@ Busca **RDS** → **Create database**:
 6. **Storage:** 20 GiB, sin autoscaling.
 7. **Connectivity:** *Don't connect to an EC2 compute resource* · VPC *default* · **Public access: No** ·
    **Existing VPC security groups:** quita *default* y elige **`sg-rds`**.
-8. Abre **Additional configuration** → **Initial database name:** `tubeyou` (importante, si no lo pones no se crea).
+8. Abre **Additional configuration** → **Initial database name:** `tubeyou_db` (importante, si no lo pones no se crea).
 9. Desmarca backups/monitoring si quieres ahorrar → **Create database**.
 
 Espera a que el estado sea **Available** (≈10 min). Clic en `tubeyou-db` → pestaña **Connectivity & security** →
 copia el **Endpoint** (`tubeyou-db.xxxx.us-east-1.rds.amazonaws.com`).
 
-Tu `DATABASE_URL` será:
-`postgresql+psycopg://postgres:TU_CONTRASEÑA@ENDPOINT:5432/tubeyou`
-(si la contraseña tiene `@`, `:` o `/`, cámbiala por una sin símbolos especiales).
+Usarás estos datos en el `.env` de la EC2 (paso 6): usuario `postgres`, tu contraseña, el **Endpoint**,
+puerto `5432` y base de datos `tubeyou_db`.
 
 ---
 
@@ -210,17 +209,20 @@ python3.11 -m pip install --user -r /opt/tubeyou/backend/requirements.txt
 **b) Variables de entorno** (reemplaza los valores en MAYÚSCULAS):
 ```bash
 cat > /opt/tubeyou/backend/.env <<'EOF'
-DATABASE_URL=postgresql+psycopg://postgres:TU_CONTRASEÑA@ENDPOINT-RDS:5432/tubeyou
-SECRET_KEY=PEGA_AQUI_UNA_CLAVE_LARGA
-CORS_ORIGINS=http://URL-DEL-SITIO-S3
-STORAGE_BACKEND=s3
+DB_USER=postgres
+DB_PASSWORD=TU_CONTRASEÑA
+DB_HOST=ENDPOINT-RDS
+DB_PORT=5432
+DB_NAME=tubeyou_db
+JWT_SECRET_KEY=PEGA_AQUI_UNA_CLAVE_LARGA
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
 AWS_REGION=us-east-1
-S3_VIDEOS_BUCKET=tubeyou-videos-TUSUFIJO
-S3_THUMBS_BUCKET=tubeyou-miniaturas-TUSUFIJO
+S3_BUCKET_VIDEOS=tubeyou-videos-TUSUFIJO
+S3_BUCKET_THUMBNAILS=tubeyou-miniaturas-TUSUFIJO
 EOF
 chmod 600 /opt/tubeyou/backend/.env
 ```
-- `CORS_ORIGINS` = la **Bucket website endpoint** del paso 1, **sin barra final** (empieza con `http://`).
 - Clave: ejecuta `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` y pega el resultado.
 - Nunca subas este `.env` a GitHub (ya está ignorado).
 
@@ -261,7 +263,7 @@ pm2 startup
 `pm2 startup` imprime una línea que empieza con `sudo env PATH=...`: **cópiala y ejecútala** para que la API
 arranque sola al reiniciar la EC2.
 
-**e) Comprobar:** en tu navegador abre `http://IP-API/docs`. Debe verse Swagger. (También `http://IP-API/health` → `{"status":"ok"}`.)
+**e) Comprobar:** en tu navegador abre `http://IP-API/docs`. Debe verse Swagger. (También `http://IP-API/` → `{"status":"online"}`.)
 Si falla: `pm2 logs fastapi` y `sudo systemctl status nginx`.
 
 **Actualizar el backend más adelante** (después de un `git push`):
@@ -366,7 +368,7 @@ Hay dos workflows en `.github/workflows/`, igual que en el repositorio de refere
 
 | Workflow | Cuándo corre | Qué hace |
 |---|---|---|
-| **`frontend-ci.yml`** (Frontend CI) | En cada **Pull Request a `main`** y manualmente | `npm ci`, `npm run lint`, `npm run build` y verifica que exista `dist/index.html`. También instala el backend y corre `pytest`. **No despliega.** |
+| **`frontend-ci.yml`** (Frontend CI) | En cada **Pull Request a `main`** y manualmente | `npm ci`, `npm run lint`, `npm run build` y verifica que exista `dist/index.html`. **No despliega.** |
 | **`frontend-cd.yml`** (Frontend CD) | Al hacer **push / merge a `main`** (cambios en `frontend/**`) y manualmente | Compila el frontend, entra a AWS con **OIDC** (credenciales temporales), sube `dist/` a S3 y, si definiste `CLOUDFRONT_DISTRIBUTION_ID`, invalida la caché de CloudFront. Se omite mientras no exista `S3_BUCKET_NAME`. |
 
 Para ejecutarlos a mano: pestaña **Actions** → elige el workflow → **Run workflow**.
@@ -393,7 +395,7 @@ Recargar `/watch/1` o `/profile` funciona porque el *Error document* es `index.h
 | Síntoma | Causa probable |
 |---|---|
 | El sitio carga pero no muestra videos / "No se pudo conectar" | `VITE_API_URL` incorrecta, o la API caída (`pm2 list`) |
-| Error CORS en la consola del navegador | `CORS_ORIGINS` no coincide exactamente con la URL del sitio S3 |
+| Error CORS en la consola del navegador | La API está caída o `VITE_API_URL` apunta a otra dirección |
 | `/docs` no abre | Falta la regla HTTP en `sg-ec2`, o `pm2`/`nginx` detenidos |
 | La API no conecta a la base | `sg-rds` sin regla desde `sg-ec2`, o contraseña/endpoint mal en `.env` |
 | Falla la subida de videos | Falta el rol `tubeyou-ec2-role` en la EC2, o nombres de bucket distintos en `.env` |

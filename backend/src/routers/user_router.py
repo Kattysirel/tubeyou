@@ -1,41 +1,46 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlmodel import Session
 
 from core.security import create_access_token
-from crud import user_crud
-from database.database import get_db
-from schemas.user_schema import LoginResponse, UserCreate, UserLogin, UserRead
+from crud.user_crud import (
+    authenticate_user,
+    create_user,
+    get_user_by_email,
+    get_user_by_id,
+    to_user_read,
+)
+from database.database import get_session
+from schemas.user_schema import Token, UserCreate, UserLogin, UserRead
 
 router = APIRouter(tags=["Usuarios"])
 
 
-def _to_read(db: Session, user) -> UserRead:
-    return UserRead(
-        id=user.id,
-        name=user.name,
-        email=user.email,
-        video_count=user_crud.count_videos(db, user.id),
-    )
-
-
 @router.post("/users", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def register(data: UserCreate, db: Session = Depends(get_db)):
-    if user_crud.get_by_email(db, data.email):
-        raise HTTPException(status.HTTP_409_CONFLICT, "Ya existe una cuenta con ese correo")
-    return _to_read(db, user_crud.create(db, data))
+def register_user(data: UserCreate, session: Session = Depends(get_session)):
+    if get_user_by_email(session, data.email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe una cuenta con ese correo",
+        )
+    return to_user_read(session, create_user(session, data))
 
 
-@router.post("/login", response_model=LoginResponse)
-def login(data: UserLogin, db: Session = Depends(get_db)):
-    user = user_crud.authenticate(db, data.email, data.password)
+@router.post("/login", response_model=Token)
+def login(data: UserLogin, session: Session = Depends(get_session)):
+    user = authenticate_user(session, data.email, data.password)
     if user is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Correo o contrasena incorrectos")
-    return LoginResponse(access_token=create_access_token(user.id), user=_to_read(db, user))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Correo o contrasena incorrectos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = create_access_token(data={"sub": str(user.id), "email": user.email})
+    return {"access_token": token, "token_type": "bearer", "user": to_user_read(session, user)}
 
 
 @router.get("/users/{user_id}", response_model=UserRead)
-def get_user(user_id: int, db: Session = Depends(get_db)):
-    user = user_crud.get_by_id(db, user_id)
+def get_user(user_id: int, session: Session = Depends(get_session)):
+    user = get_user_by_id(session, user_id)
     if user is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
-    return _to_read(db, user)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    return to_user_read(session, user)

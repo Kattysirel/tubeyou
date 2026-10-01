@@ -1,4 +1,6 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from datetime import datetime
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserCreate(BaseModel):
@@ -13,15 +15,17 @@ class UserLogin(BaseModel):
 
 
 class UserRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     name: str
-    email: EmailStr
+    email: str
+    created_at: datetime
     video_count: int = 0
 
+    class Config:
+        from_attributes = True
 
-class LoginResponse(BaseModel):
+
+class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserRead

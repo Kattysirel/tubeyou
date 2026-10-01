@@ -1,62 +1,61 @@
-"""Seguridad: hash de contrasenas (bcrypt), tokens JWT y usuario autenticado."""
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.orm import Session
+from sqlmodel import Session
 
-from core.config import settings
-from database.database import get_db
+from core.config import ACCESS_TOKEN_EXPIRE_MINUTES, JWT_ALGORITHM, JWT_SECRET_KEY
+from database.database import get_session
 from models.user_model import User
 
-bearer_scheme = HTTPBearer(auto_error=False)
+http_bearer = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
-def verify_password(password: str, password_hash: str) -> bool:
+def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
-        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
     except ValueError:
         return False
 
 
-def create_access_token(user_id: int) -> str:
-    expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {"sub": str(user_id), "exp": expire}
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
-def decode_access_token(token: str) -> int | None:
+def decode_access_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return int(payload["sub"])
-    except (jwt.PyJWTError, KeyError, ValueError):
+        return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
         return None
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: Session = Depends(get_db),
+    bearer: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer),
+    session: Session = Depends(get_session),
 ) -> User:
-    # Import local: user_crud usa hash_password de este mismo modulo (evita importacion circular)
-    from crud import user_crud
-
-    unauthorized = HTTPException(
+    credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Credenciales invalidas o sesion expirada",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if credentials is None:
-        raise unauthorized
-    user_id = decode_access_token(credentials.credentials)
-    if user_id is None:
-        raise unauthorized
-    user = user_crud.get_by_id(db, user_id)
+    if bearer is None:
+        raise credentials_exception
+
+    payload = decode_access_token(bearer.credentials)
+    if not payload or not payload.get("sub"):
+        raise credentials_exception
+
+    user = session.get(User, int(payload["sub"]))
     if user is None:
-        raise unauthorized
+        raise credentials_exception
     return user

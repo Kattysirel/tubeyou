@@ -20,7 +20,7 @@ TubeYou/
 ├── .github/
 │   ├── pull_request_template.md
 │   └── workflows/
-│       ├── frontend-ci.yml         PR: lint, build y pruebas (no despliega)
+│       ├── frontend-ci.yml         PR: lint y build (no despliega)
 │       └── frontend-cd.yml         push a main: OIDC → S3 (+ CloudFront opcional)
 ├── backend/
 │   ├── src/
@@ -32,8 +32,7 @@ TubeYou/
 │   │   ├── schemas/     user_schema.py · video_schema.py · comment_schema.py
 │   │   ├── services/    storage_service.py · local_service.py · s3_service.py
 │   │   └── main.py
-│   ├── tests/
-│   ├── .env-example · requirements.txt · requirements-dev.txt · pytest.ini
+│   ├── .env-example · requirements.txt
 ├── frontend/
 │   ├── public/
 │   └── src/
@@ -77,7 +76,7 @@ Backend por capas (`core`, `crud`, `database`, `models`, `routers`, `schemas`, `
 | POST/GET | `/videos/{id}/comments` | Comentar / listar |
 | GET | `/videos/{id}/recommended` | Recomendados |
 | POST | `/videos/{id}/view` | Suma una vista |
-| GET | `/health` | Estado del servicio |
+| GET | `/` | Estado del servicio |
 
 Validaciones: video solo **MP4** (máx. 100 MB); miniatura **JPG/JPEG/PNG** (máx. 5 MB).
 
@@ -88,15 +87,13 @@ Validaciones: video solo **MP4** (máx. 100 MB); miniatura **JPG/JPEG/PNG** (má
 cd backend
 python -m venv .venv
 .venv/Scripts/activate        # Linux/Mac: source .venv/bin/activate
-pip install -r requirements-dev.txt   # incluye pytest
+pip install -r requirements.txt
 cp .env-example .env          # opcional
 cd src
 fastapi dev          # desarrollo con recarga automática (puerto 8000)
 ```
 Sin `.env` usa SQLite y guarda los archivos en `backend/uploads/`. Para PostgreSQL define
-`DATABASE_URL=postgresql+psycopg://usuario:clave@localhost:5432/tubeyou`.
-
-Pruebas (desde `backend/`): `python -m pytest`.
+`DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` y `DB_NAME` en `backend/.env`.
 
 En producción (EC2) se entra a `src/` y se deja en segundo plano con PM2:
 
@@ -124,11 +121,9 @@ npm run build    # genera dist/ (es lo único que se sube al bucket del frontend
 
 | Variable | Uso |
 |---|---|
-| `DATABASE_URL` | Conexión a PostgreSQL / RDS |
-| `SECRET_KEY` | Firma de los JWT |
-| `CORS_ORIGINS` | Orígenes permitidos (URL del frontend) |
-| `STORAGE_BACKEND` | `local` o `s3` |
-| `AWS_REGION`, `S3_VIDEOS_BUCKET`, `S3_THUMBS_BUCKET` | Solo con `s3` |
+| `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME` | Conexión a PostgreSQL / Amazon RDS |
+| `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES` | Firma y duración de los JWT |
+| `AWS_REGION`, `S3_BUCKET_VIDEOS`, `S3_BUCKET_THUMBNAILS` | Buckets de S3 (si están vacíos, los archivos se guardan en `src/static/uploads`) |
 
 No hay claves de AWS en el código: la EC2 usa un **IAM Role** y GitHub Actions usa **OIDC**.
 
@@ -136,6 +131,6 @@ No hay claves de AWS en el código: la EC2 usa un **IAM Role** y GitHub Actions 
 
 - Guía manual paso a paso (S3, IAM, Security Groups, RDS, EC2, OIDC, GitHub) y evidencias: [docs/GUIA_DESPLIEGUE_AWS.md](docs/GUIA_DESPLIEGUE_AWS.md)
 - CI/CD (dos workflows, como en el repositorio de referencia):
-  - [frontend-ci.yml](.github/workflows/frontend-ci.yml): en cada PR a `main` corre lint y build del frontend y las pruebas del backend. No despliega.
+  - [frontend-ci.yml](.github/workflows/frontend-ci.yml): en cada PR a `main` corre lint y build del frontend. No despliega.
   - [frontend-cd.yml](.github/workflows/frontend-cd.yml): al hacer push a `main` entra a AWS con OIDC (sin claves), sube `dist/` a S3 e invalida CloudFront si está configurado.
   - El backend se actualiza a mano en la EC2 (`git pull` + `pm2 restart fastapi`).

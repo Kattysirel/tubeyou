@@ -1,11 +1,10 @@
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class VideoRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     title: str
     description: str
@@ -13,8 +12,11 @@ class VideoRead(BaseModel):
     thumbnail_url: str
     views: int
     user_id: int
-    user_name: str
     created_at: datetime
+    user_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 
 class ViewsRead(BaseModel):

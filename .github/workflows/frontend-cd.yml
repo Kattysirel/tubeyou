@@ -1,7 +1,5 @@
 name: Frontend CD - Deploy to AWS S3 (OIDC)
 
-# Se ejecuta al hacer push/merge a main (o manualmente).
-# El frontend se publica en S3 con credenciales temporales (OIDC): no hay claves permanentes.
 on:
   push:
     branches:
@@ -15,16 +13,10 @@ permissions:
   id-token: write   # Necesario para solicitar el token JWT OIDC a AWS STS
   contents: read    # Necesario para hacer checkout del repositorio
 
-concurrency:
-  group: frontend-cd-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   deploy:
     name: Build & Deploy to S3
     runs-on: ubuntu-latest
-    # Se omite mientras AWS no este configurado (variable S3_BUCKET_NAME vacia).
-    if: ${{ vars.S3_BUCKET_NAME != '' }}
     permissions:
       id-token: write
       contents: read
@@ -40,7 +32,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -57,7 +49,7 @@ jobs:
           echo "=== Diagnosticando Token OIDC de GitHub ==="
           TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
           echo "Payload JWT que GitHub envía a AWS:"
-          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{aud, iss, sub, repository, repository_owner, ref}'
+          echo "$TOKEN" | cut -d. -f2 | base64 -d | jq '{aud, iss, sub, repository, repository_owner, ref}'
 
       - name: Authenticate with AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -77,8 +69,7 @@ jobs:
 
           # Subir index.html sin caché para que los usuarios siempre obtengan la última versión
           aws s3 cp dist/index.html s3://${{ vars.S3_BUCKET_NAME }}/index.html \
-            --cache-control "max-age=0,no-cache,no-store,must-revalidate" \
-            --content-type "text/html; charset=utf-8"
+            --cache-control "max-age=0,no-cache,no-store,must-revalidate"
 
       - name: Invalidate CloudFront Cache (Optional)
         if: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID != '' }}
@@ -87,8 +78,3 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/*"
-
-      - name: Verify deployment
-        run: |
-          aws s3 ls s3://${{ vars.S3_BUCKET_NAME }}/index.html
-          echo "Frontend publicado en s3://${{ vars.S3_BUCKET_NAME }}"
