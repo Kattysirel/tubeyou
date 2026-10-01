@@ -46,7 +46,7 @@ TubeYou/
 │       ├── services/    api.js · userService · videoService · commentService · useApi · format
 │       ├── App.jsx · index.css · main.jsx
 ├── aws/frontend-oidc-s3-setup.yml  plantilla CloudFormation opcional (bucket + OIDC + rol)
-├── docs/GUIA_DESPLIEGUE_AWS.md     paso a paso manual en la consola de AWS
+├── docs/Manual_Despliegue_AWS_TubeYou.docx   manual clic a clic para configurar AWS
 ├── .env-example
 ├── .gitignore
 └── README.md
@@ -99,7 +99,7 @@ En producción (EC2) se entra a `src/` y se deja en segundo plano con PM2:
 
 ```bash
 cd backend/src
-pm2 start "fastapi run"
+pm2 start "../venv/bin/fastapi run" --name "fastapi-backend"
 ```
 
 ### Frontend
@@ -129,8 +129,8 @@ No hay claves de AWS en el código: la EC2 usa un **IAM Role** y GitHub Actions 
 
 ## Despliegue
 
-- Guía manual paso a paso (S3, IAM, Security Groups, RDS, EC2, OIDC, GitHub) y evidencias: [docs/GUIA_DESPLIEGUE_AWS.md](docs/GUIA_DESPLIEGUE_AWS.md)
+- Manual clic a clic (S3, RDS, IAM, EC2, CloudFront, OIDC, GitHub, CodeRabbit) y evidencias: [docs/Manual_Despliegue_AWS_TubeYou.docx](docs/Manual_Despliegue_AWS_TubeYou.docx)
 - CI/CD (dos workflows, como en el repositorio de referencia):
   - [frontend-ci.yml](.github/workflows/frontend-ci.yml): en cada PR a `main` corre lint y build del frontend. No despliega.
   - [frontend-cd.yml](.github/workflows/frontend-cd.yml): al hacer push a `main` entra a AWS con OIDC (sin claves), sube `dist/` a S3 e invalida CloudFront si está configurado.
-  - El backend se actualiza a mano en la EC2 (`git pull` + `pm2 restart fastapi`).
+  - El backend se actualiza a mano en la EC2 (`git pull` + `pm2 restart fastapi-backend`).

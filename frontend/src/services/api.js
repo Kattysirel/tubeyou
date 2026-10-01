@@ -1,4 +1,10 @@
-export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+// URL de la API: sin espacios ni barras finales (evita peticiones como //videos detras de CloudFront)
+const rawApiUrl =
+  import.meta.env.VITE_API_URL !== undefined
+    ? import.meta.env.VITE_API_URL
+    : (import.meta.env.DEV ? 'http://localhost:8000' : '')
+
+export const API_URL = (rawApiUrl || '').trim().replace(/\/+$/, '')
 
 const TOKEN_KEY = 'tubeyou-token'
 

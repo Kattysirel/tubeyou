@@ -89,9 +89,9 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              StringLike:
-                # Permite a GitHub Actions en tu repositorio autenticarse
-                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrgOrUser}/${GitHubRepoName}:*'
+                # Identificadores inmutables de GitHub (usuario@id/repositorio@id) y rama main.
+                # IAM rechaza comodines cortos, por eso se usa StringEquals con el valor exacto.
+                token.actions.githubusercontent.com:sub: 'repo:Kattysirel@218675324/tubeyou@1397006392:ref:refs/heads/main'
       Policies:
         - PolicyName: S3DeployPolicy
           PolicyDocument:
